@@ -1,0 +1,47 @@
+[
+  {
+    "id": "1",
+    "question": "What is patience in Islam?",
+    "answer": "Patience (sabr) is a core value in Islam. It means steadfastness in obeying Allah, restraint from what He forbade, and calm acceptance during hardship. The Quran pairs patience with prayer as a means of seeking help, and promises that Allah is with those who are patient.",
+    "keywords": ["patience", "sabr", "perseverance", "صبر"],
+    "references": [
+      {
+        "type": "quran",
+        "surah": "Al-Baqarah",
+        "ayah": "153",
+        "text": "O you who believe, seek help through patience and prayer; indeed, Allah is with the patient."
+      }
+    ],
+    "language": "en"
+  },
+  {
+    "id": "2",
+    "question": "ما معنى الصبر في الإسلام؟",
+    "answer": "الصبر من الأخلاق العظيمة في الإسلام، وهو حبس النفس على طاعة الله، وحبسها عن معصيته، وحبسها عن التسخط عند أقداره المؤلمة. وقد قرن الله الصبر بالصلاة وجعله سبيلاً للاستعانة، ووعد الصابرين بمعيته.",
+    "keywords": ["الصبر", "صبر", "ابتلاء", "الصابرين"],
+    "references": [
+      {
+        "type": "quran",
+        "surah": "البقرة",
+        "ayah": "153",
+        "text": "يَا أَيُّهَا الَّذِينَ آمَنُوا اسْتَعِينُوا بِالصَّبْرِ وَالصَّلَاةِ ۚ إِنَّ اللَّهَ مَعَ الصَّابِرِينَ"
+      }
+    ],
+    "language": "ar"
+  },
+  {
+    "id": "3",
+    "question": "ما هو تفسير السعدي؟",
+    "answer": "تفسير السعدي واسمه «تيسير الكريم الرحمن في تفسير كلام المنان» هو تفسير للقرآن الكريم ألّفه الشيخ عبد الرحمن بن ناصر السعدي (ت 1376هـ). يتميز بسهولة العبارة ووضوح المعنى والتركيز على هداية الآيات. هذا المساعد يجيب من نص هذا التفسير فقط.",
+    "keywords": ["السعدي", "تيسير الكريم الرحمن", "من هو السعدي", "المؤلف", "الكتاب"],
+    "references": [
+      {
+        "type": "book",
+        "surah": "تيسير الكريم الرحمن في تفسير كلام المنان",
+        "ayah": "—",
+        "text": "الشيخ عبد الرحمن بن ناصر السعدي (1307–1376هـ)"
+      }
+    ],
+    "language": "ar"
+  }
+]

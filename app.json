@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "بصيرة",
+    "slug": "baseera-tafseer-chatbot",
+    "scheme": "baseera",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F6F0E1",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.baseera.tafseerchatbot"
+    },
+    "android": {
+      "backgroundColor": "#0D3A2D",
+      "package": "com.baseera.tafseerchatbot"
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ]
+  }
+}
