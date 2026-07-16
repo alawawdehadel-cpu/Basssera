@@ -1,17 +1,28 @@
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import LoadingState from '../src/components/ui/LoadingState';
 import { COLORS } from '../src/constants/colors';
 import { LanguageProvider } from '../src/hooks/useAppLanguage';
 
 export default function RootLayout() {
+  // The dedicated Quran font must be ready before any Quran text renders,
+  // otherwise the reader would flash broken/fallback Uthmani glyphs.
   const [fontsLoaded] = useFonts({
-    UthmanicHafs: require('../assets/fonts/UthmanicHafs.ttf'),
-    UthmanTN1: require('../assets/fonts/UthmanTN1.ttf'),
+    QuranFont: require('../assets/fonts/QuranFont.ttf'),
   });
 
-  if (!fontsLoaded) return null;
+  if (!fontsLoaded) {
+    return (
+      <SafeAreaProvider>
+        <View style={{ flex: 1, backgroundColor: COLORS.parchment, justifyContent: 'center' }}>
+          <LoadingState label="…" />
+        </View>
+      </SafeAreaProvider>
+    );
+  }
 
   return (
     <SafeAreaProvider>

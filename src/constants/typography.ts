@@ -5,16 +5,16 @@ export const FONTS = {
   arabic: Platform.select({ ios: 'Damascus', android: 'sans-serif', default: undefined }),
   base: Platform.select({ ios: 'System', android: 'sans-serif', default: undefined }),
   /**
-   * KFGQPC Uthman Taha Naskh — Quran body text. Handles Tanzil annotation
-   * marks correctly (small ۟ above silent alef, هُدًۭى, عَلَىٰ).
+   * QuranFont = Amiri Quran — the dedicated Uthmani/Mushaf typeface used for
+   * ALL Quran reading (body text AND the ayah-end medallion). It renders the
+   * full range of Tanzil/Unicode Uthmani marks the way a real Mushaf does:
+   * the iqlāb/ikhfāʾ small meem over/under tanwīn (U+06E2 / U+06ED), the
+   * silent-alef round zero (U+06DF) as a small superscript — not a giant
+   * inline circle — and it encloses the ayah number inside an ornate
+   * medallion via U+06DD. Never pair it with letterSpacing/fontWeight, which
+   * break Arabic joining and mark placement. Loaded in app/_layout.tsx.
    */
-  quran: 'UthmanTN1',
-  /**
-   * KFGQPC UthmanicHafs1 Ver13 — ornate ayah-end medallion (۝ + number)
-   * only; it draws U+06DF as a large inline circle so don't use it for
-   * body text. Both loaded in app/_layout.tsx from assets/fonts.
-   */
-  quranOrnament: 'UthmanicHafs',
+  quran: 'QuranFont',
 };
 
 export const TEXT = {

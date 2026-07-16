@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { COLORS } from '../../constants/colors';
 import { RADIUS, SPACING } from '../../constants/spacing';
-import { FONTS } from '../../constants/typography';
+import QuranText from './QuranText';
 import type { QuranAyah } from '../../types/quran.types';
 
 interface AyahCardProps {
@@ -11,6 +11,12 @@ interface AyahCardProps {
   bookmarked: boolean;
   onToggleBookmark: () => void;
   highlighted?: boolean;
+  /**
+   * Uthmani text to display instead of `ayah.textUthmani` — used to show ayah 1
+   * without its embedded Basmala (rendered separately as BismillahLine). Still
+   * plain Uthmani text; nothing is normalized.
+   */
+  overrideText?: string;
 }
 
 function StarIcon({ filled }: { filled: boolean }) {
@@ -34,6 +40,7 @@ export default function AyahCard({
   bookmarked,
   onToggleBookmark,
   highlighted = false,
+  overrideText,
 }: AyahCardProps) {
   return (
     <View style={[styles.wrapper, highlighted && styles.wrapperHighlighted]}>
@@ -50,9 +57,9 @@ export default function AyahCard({
           <StarIcon filled={bookmarked} />
         </Pressable>
       </View>
-      <Text style={[styles.ayahText, { fontSize, lineHeight: fontSize * 1.9 }]}>
-        {ayah.textUthmani}
-      </Text>
+      <QuranText size={fontSize} align="right" color={COLORS.forest}>
+        {overrideText ?? ayah.textUthmani}
+      </QuranText>
     </View>
   );
 }
@@ -93,11 +100,5 @@ const styles = StyleSheet.create({
   },
   starButton: {
     padding: 4,
-  },
-  ayahText: {
-    fontFamily: FONTS.quran,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-    color: COLORS.forest,
   },
 });

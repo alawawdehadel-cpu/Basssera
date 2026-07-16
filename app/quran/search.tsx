@@ -4,9 +4,9 @@ import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import LoadingState from '../../src/components/ui/LoadingState';
+import QuranText from '../../src/components/quran/QuranText';
 import { COLORS } from '../../src/constants/colors';
 import { RADIUS, SPACING } from '../../src/constants/spacing';
-import { FONTS } from '../../src/constants/typography';
 import { useAppLanguage } from '../../src/hooks/useAppLanguage';
 import { searchQuran } from '../../src/utils/quranSearch';
 import type { QuranAyah } from '../../src/types/quran.types';
@@ -100,9 +100,9 @@ export default function QuranSearchScreen() {
                 </Text>
                 <Text style={styles.resultAyahNumber}>#{item.ayahNumber}</Text>
               </View>
-              <Text style={styles.resultText} numberOfLines={3}>
+              <QuranText size={17} align="right" color={COLORS.forest} numberOfLines={3}>
                 {item.textUthmani}
-              </Text>
+              </QuranText>
             </Pressable>
           )}
           ItemSeparatorComponent={() => <View style={{ height: SPACING.sm }} />}
@@ -195,13 +195,5 @@ const styles = StyleSheet.create({
   resultAyahNumber: {
     fontSize: 11,
     color: COLORS.inkSoft,
-  },
-  resultText: {
-    fontFamily: FONTS.quran,
-    fontSize: 17,
-    lineHeight: 30,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-    color: COLORS.forest,
   },
 });

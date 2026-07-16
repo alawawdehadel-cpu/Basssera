@@ -11,11 +11,19 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import AyahCard from '../../../src/components/quran/AyahCard';
+import BismillahLine from '../../../src/components/quran/BismillahLine';
 import FontSizeControl from '../../../src/components/quran/FontSizeControl';
+import DecorativeSurahBanner from '../../../src/components/quran/DecorativeSurahBanner';
 import { COLORS } from '../../../src/constants/colors';
 import { RADIUS, SPACING } from '../../../src/constants/spacing';
 import { useAppLanguage } from '../../../src/hooks/useAppLanguage';
 import { getAyahsBySurah, getSurahMeta } from '../../../src/utils/quranDataLoader';
+import { runQuranRenderCheck } from '../../../src/utils/quranRenderCheck';
+import {
+  getSurahOpeningMeta,
+  shouldRenderBismillah,
+  stripLeadingBismillah,
+} from '../../../src/utils/surahOpening';
 import {
   loadBookmarks,
   loadFontSize,
@@ -55,6 +63,13 @@ export default function SurahReaderScreen() {
 
   const ayahs = useMemo(() => getAyahsBySurah(surahNumber), [surahNumber]);
   const meta = useMemo(() => getSurahMeta(surahNumber), [surahNumber]);
+  const openingMeta = useMemo(() => getSurahOpeningMeta(surahNumber), [surahNumber]);
+  const renderBismillah = shouldRenderBismillah(surahNumber);
+
+  // Dev-only: confirm the reader renders Uthmani text with the Quran font.
+  useEffect(() => {
+    runQuranRenderCheck(ayahs, true);
+  }, [ayahs]);
 
   useEffect(() => {
     let mounted = true;
@@ -154,13 +169,29 @@ export default function SurahReaderScreen() {
         data={ayahs}
         keyExtractor={(a) => a.id}
         contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => (
+        ListHeaderComponent={
+          <View style={styles.opening}>
+            <DecorativeSurahBanner
+              surahNumber={surahNumber}
+              surahNameArabic={openingMeta.nameArabic}
+              ayahCount={openingMeta.ayahCount}
+              revelationType={openingMeta.revelationType}
+            />
+            {renderBismillah && <BismillahLine fontSize={fontSize} />}
+          </View>
+        }
+        renderItem={({ item, index }) => (
           <AyahCard
             ayah={item}
             fontSize={fontSize}
             bookmarked={bookmarkIds.has(item.id)}
             onToggleBookmark={() => handleToggleBookmark(item)}
             highlighted={highlightedId === item.id}
+            // Ayah 1 embeds the Basmala in this dataset; show it once as the
+            // separate BismillahLine above and drop the prefix here.
+            overrideText={
+              index === 0 && renderBismillah ? stripLeadingBismillah(item.textUthmani) : undefined
+            }
           />
         )}
         ItemSeparatorComponent={() => <View style={{ height: SPACING.sm }} />}
@@ -218,6 +249,9 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: SPACING.lg,
+  },
+  opening: {
+    marginBottom: SPACING.md,
   },
   footerNote: {
     textAlign: 'center',

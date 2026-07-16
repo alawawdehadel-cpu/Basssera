@@ -1,6 +1,7 @@
-import { Platform, Text } from 'react-native';
+import { Platform, Text, type TextStyle } from 'react-native';
 import { COLORS } from '../../constants/colors';
-import { FONTS } from '../../constants/typography';
+import QuranText from './QuranText';
+import type { MushafLine as MushafLineType } from '../../types/quran.types';
 
 /**
  * numberOfLines={1} compiles to overflow:hidden + text-overflow:ellipsis on
@@ -11,7 +12,13 @@ const CLAMP_PROPS =
   Platform.OS === 'web'
     ? {}
     : { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.6 };
-import type { MushafLine as MushafLineType } from '../../types/quran.types';
+
+// Web-only: widen the gaps between words so dense harakat don't make adjacent
+// words look merged at small sizes. wordSpacing only affects the U+0020 spaces
+// between words — unlike letterSpacing, which would break Arabic cursive
+// joining inside each word.
+const webWordSpacing = (fontSize: number): TextStyle =>
+  (Platform.OS === 'web' ? { wordSpacing: `${fontSize * 0.15}px` } : {}) as TextStyle;
 
 interface MushafLineProps {
   line: MushafLineType;
@@ -29,27 +36,42 @@ function toEasternDigits(n: number): string {
 }
 
 /**
- * One physical Mushaf line: continuous justified Uthmani text, with an
- * ayah-end ornament (۝ + Eastern-Arabic ayah number) inline right after
- * the last word of each ayah — never a separate card per ayah.
+ * One physical Mushaf line: continuous justified Uthmani text rendered in the
+ * single Quran font. The ayah-end medallion is the Unicode END OF AYAH mark
+ * (U+06DD) followed by the ayah number — the Quran font draws the number
+ * enclosed inside an ornate rosette, exactly like a printed Mushaf. The font
+ * never switches between ayahs; the medallion is the same typeface, only
+ * tinted gold. Never a separate card per ayah.
  */
 export default function MushafLine({ line, fontSize, onAyahPress }: MushafLineProps) {
   if (line.isBismillah) {
     return (
-      <Text style={[styles(fontSize).bismillah]} {...(Platform.OS === 'web' ? {} : { numberOfLines: 1 })}>
+      <QuranText
+        size={fontSize * 0.95}
+        align="center"
+        color={COLORS.forest}
+        lineHeightScale={1.85}
+        {...(Platform.OS === 'web' ? {} : { numberOfLines: 1 })}
+      >
         {line.text}
-      </Text>
+      </QuranText>
     );
   }
 
   return (
-    <Text style={styles(fontSize).line} {...CLAMP_PROPS}>
+    <QuranText
+      size={fontSize}
+      align="center"
+      lineHeightScale={1.85}
+      style={webWordSpacing(fontSize)}
+      {...CLAMP_PROPS}
+    >
       {line.words.map((word, i) => (
         <Text key={`${word.surahNumber}-${word.ayahNumber}-${word.wordNumber}-${i}`}>
           {word.textUthmani}
           {word.isAyahEnd ? (
             <Text
-              style={styles(fontSize).ayahEnd}
+              style={{ color: COLORS.goldDeep }}
               onPress={
                 onAyahPress ? () => onAyahPress(word.surahNumber, word.ayahNumber) : undefined
               }
@@ -63,30 +85,6 @@ export default function MushafLine({ line, fontSize, onAyahPress }: MushafLinePr
           )}
         </Text>
       ))}
-    </Text>
+    </QuranText>
   );
 }
-
-const styles = (fontSize: number) => ({
-  line: {
-    fontFamily: FONTS.quran,
-    fontSize,
-    lineHeight: fontSize * 1.85,
-    textAlign: 'center' as const,
-    writingDirection: 'rtl' as const,
-    color: COLORS.forestDeep,
-  },
-  ayahEnd: {
-    fontFamily: FONTS.quranOrnament,
-    fontSize: fontSize * 0.72,
-    color: COLORS.goldDeep,
-  },
-  bismillah: {
-    fontFamily: FONTS.quran,
-    fontSize: fontSize * 0.95,
-    lineHeight: fontSize * 1.85,
-    textAlign: 'center' as const,
-    writingDirection: 'rtl' as const,
-    color: COLORS.forest,
-  },
-});

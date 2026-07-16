@@ -1,9 +1,12 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import MushafLine from './MushafLine';
-import MushafPageHeader from './MushafPageHeader';
-import { COLORS } from '../../constants/colors';
-import { RADIUS, SPACING } from '../../constants/spacing';
-import type { MushafPage } from '../../types/quran.types';
+import DecorativeSurahBanner from './DecorativeSurahBanner';
+import BismillahLine from './BismillahLine';
+import MushafPageContainer from './MushafPageContainer';
+import { READING } from '../../constants/colors';
+import { SPACING } from '../../constants/spacing';
+import type { MushafLine as MushafLineType, MushafPage } from '../../types/quran.types';
+import { getSurahOpeningMeta, shouldRenderBismillah } from '../../utils/surahOpening';
 import type { UIStrings } from '../../utils/strings';
 
 interface MushafPageViewProps {
@@ -15,11 +18,23 @@ interface MushafPageViewProps {
 }
 
 /**
- * One Mushaf page: cream "paper" surface, gold ornamental border, dark
- * green surah/juz banner, then continuous justified Uthmani lines — no
- * per-ayah cards, no artificial spacing. Falls back to a clear "layout
- * data not added yet" notice when this page hasn't been populated in
- * mushaf-pages.json (see src/data/quran/README.md).
+ * If this line begins a surah, return that surah number; otherwise null. The
+ * page layout data drops the printed surah-name/Basmala lines, so a surah
+ * start is the line whose first word is the very first word of ayah 1.
+ */
+function surahStartOf(line: MushafLineType): number | null {
+  if (line.isSurahHeader || line.isBismillah) return null;
+  const first = line.words[0];
+  if (first && first.ayahNumber === 1 && first.wordNumber === 1) return first.surahNumber;
+  return null;
+}
+
+/**
+ * One Mushaf page rendered on the premium page shell: continuous justified
+ * Uthmani lines, with a decorative banner + Basmala at each surah opening (no
+ * per-ayah cards). Surah/Juz/page context now lives in the top info bar, so the
+ * page itself stays calm and uncluttered. Falls back to a clear notice when a
+ * page has no layout data yet.
  */
 export default function MushafPageView({
   page,
@@ -29,65 +44,66 @@ export default function MushafPageView({
   onAyahPress,
 }: MushafPageViewProps) {
   return (
-    <View style={styles.paper}>
-      <View style={styles.innerBorder}>
-        {page ? (
-          <>
-            <MushafPageHeader surahs={page.surahs} juz={page.juz} strings={strings} />
-            <View style={styles.linesWrap}>
-              {page.lines.map((line) => (
+    <MushafPageContainer pageNumber={pageNumber}>
+      {page ? (
+        <ScrollView
+          style={styles.linesScroll}
+          contentContainerStyle={styles.linesWrap}
+          showsVerticalScrollIndicator={false}
+        >
+          {page.lines.map((line) => {
+            const start = surahStartOf(line);
+            if (!start) {
+              return (
                 <MushafLine
                   key={line.lineNumber}
                   line={line}
                   fontSize={fontSize}
                   onAyahPress={onAyahPress}
                 />
-              ))}
-            </View>
-          </>
-        ) : (
-          <View style={styles.missingWrap}>
-            <Text style={styles.missingIcon}>۞</Text>
-            <Text style={styles.missingText}>{strings.mushafDataMissing}</Text>
-          </View>
-        )}
-
-        <Text style={styles.pageNumber}>{pageNumber}</Text>
-      </View>
-    </View>
+              );
+            }
+            // A new surah opens on this line: decorative banner, then a separate
+            // Basmala (unless Al-Fatihah / At-Tawbah), then the first line.
+            const meta = getSurahOpeningMeta(start);
+            return (
+              <View key={`start-${line.lineNumber}`} style={styles.openingGroup}>
+                <DecorativeSurahBanner
+                  surahNumber={meta.surahNumber}
+                  surahNameArabic={meta.nameArabic}
+                  ayahCount={meta.ayahCount}
+                  revelationType={meta.revelationType}
+                />
+                {shouldRenderBismillah(start) && <BismillahLine fontSize={fontSize} />}
+                <MushafLine line={line} fontSize={fontSize} onAyahPress={onAyahPress} />
+              </View>
+            );
+          })}
+        </ScrollView>
+      ) : (
+        <View style={styles.missingWrap}>
+          <Text style={styles.missingIcon}>۞</Text>
+          <Text style={styles.missingText}>{strings.mushafDataMissing}</Text>
+        </View>
+      )}
+    </MushafPageContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  paper: {
+  linesScroll: {
     flex: 1,
-    backgroundColor: COLORS.parchment,
-    padding: SPACING.md,
-  },
-  innerBorder: {
-    flex: 1,
-    borderRadius: RADIUS.lg,
-    borderWidth: 2,
-    borderColor: COLORS.gold,
-    backgroundColor: COLORS.cream,
-    padding: SPACING.lg,
-    shadowColor: COLORS.forest,
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
   },
   linesWrap: {
-    flex: 1,
+    // Fills the page when content is short (so lines spread like a real
+    // Mushaf page), and scrolls when a page packs several short surahs.
+    flexGrow: 1,
     justifyContent: 'space-evenly',
     gap: 2,
+    paddingVertical: SPACING.xs,
   },
-  pageNumber: {
-    textAlign: 'center',
-    marginTop: SPACING.sm,
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.goldDeep,
+  openingGroup: {
+    gap: SPACING.xs,
   },
   missingWrap: {
     flex: 1,
@@ -98,12 +114,12 @@ const styles = StyleSheet.create({
   },
   missingIcon: {
     fontSize: 28,
-    color: COLORS.gold,
+    color: READING.gold,
   },
   missingText: {
     textAlign: 'center',
     fontSize: 14,
     lineHeight: 22,
-    color: COLORS.inkSoft,
+    color: READING.muted,
   },
 });

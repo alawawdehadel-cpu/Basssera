@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { COLORS } from '../../constants/colors';
 import { RADIUS, SPACING } from '../../constants/spacing';
-import { FONTS } from '../../constants/typography';
+import QuranText from '../quran/QuranText';
 import { QURAN_SOURCE_LABEL, type QuranReference } from '../../types/answer.types';
 import type { UIStrings } from '../../utils/strings';
 
@@ -41,12 +41,14 @@ function AyahCard({ reference, strings }: { reference: QuranReference; strings: 
         )}
       </View>
       <View style={styles.body}>
-        <Text
-          style={styles.ayahText}
+        <QuranText
+          size={19}
+          align="right"
+          color={COLORS.forest}
           numberOfLines={isLong && !expanded ? CLAMP_LINES : undefined}
         >
           {reference.text}
-        </Text>
+        </QuranText>
         {isLong && (
           <Pressable onPress={() => setExpanded((v) => !v)} hitSlop={6}>
             <Text style={styles.linkText}>{expanded ? strings.readLess : strings.readMore}</Text>
@@ -112,14 +114,6 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md + 2,
-  },
-  ayahText: {
-    fontFamily: FONTS.quran,
-    fontSize: 19,
-    lineHeight: 36,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-    color: COLORS.forest,
   },
   linkText: {
     marginTop: SPACING.xs,
