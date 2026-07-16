@@ -6,6 +6,7 @@ import Svg, { Path } from 'react-native-svg';
 import { COLORS } from '../../src/constants/colors';
 import { RADIUS, SPACING } from '../../src/constants/spacing';
 import { useAppLanguage } from '../../src/hooks/useAppLanguage';
+import { getAyah } from '../../src/utils/quranDataLoader';
 import { loadBookmarks, toggleBookmark } from '../../src/utils/storage';
 import type { QuranBookmark } from '../../src/types/quran.types';
 
@@ -77,7 +78,14 @@ export default function BookmarksScreen() {
             <View style={styles.row}>
               <Pressable
                 style={styles.rowMain}
-                onPress={() => router.push(`/quran/surah/${item.surahNumber}?ayah=${item.ayahNumber}`)}
+                onPress={() => {
+                  const page = getAyah(item.surahNumber, item.ayahNumber)?.page;
+                  router.push(
+                    page
+                      ? `/quran/mushaf/${page}`
+                      : `/quran/surah/${item.surahNumber}?ayah=${item.ayahNumber}`,
+                  );
+                }}
               >
                 <Text style={styles.rowSurah}>
                   {lang === 'ar' ? item.surahNameArabic : item.surahNameEnglish}

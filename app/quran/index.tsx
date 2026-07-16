@@ -9,7 +9,7 @@ import Alert from '../../src/components/ui/Alert';
 import { COLORS } from '../../src/constants/colors';
 import { RADIUS, SPACING } from '../../src/constants/spacing';
 import { useAppLanguage } from '../../src/hooks/useAppLanguage';
-import { getQuranValidation } from '../../src/utils/quranDataLoader';
+import { getAyah, getQuranValidation } from '../../src/utils/quranDataLoader';
 import { getTotalMushafPages } from '../../src/utils/mushafLayout';
 import { loadLastMushafPage, loadLastPosition } from '../../src/utils/storage';
 import type { LastMushafPosition, LastReadingPosition } from '../../src/types/quran.types';
@@ -110,11 +110,14 @@ export default function QuranHomeScreen() {
         ) : (
           lastPosition && (
             <Pressable
-              onPress={() =>
+              onPress={() => {
+                const page = getAyah(lastPosition.surahNumber, lastPosition.ayahNumber)?.page;
                 router.push(
-                  `/quran/surah/${lastPosition.surahNumber}?ayah=${lastPosition.ayahNumber}`,
-                )
-              }
+                  page
+                    ? `/quran/mushaf/${page}`
+                    : `/quran/surah/${lastPosition.surahNumber}?ayah=${lastPosition.ayahNumber}`,
+                );
+              }}
             >
               <AppCard style={styles.continueCard}>
                 <Text style={styles.continueLabel}>{strings.continueReading}</Text>

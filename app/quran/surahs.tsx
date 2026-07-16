@@ -69,7 +69,7 @@ export default function SurahListScreen() {
           <SurahListRow
             surah={item}
             strings={strings}
-            onPress={() => router.push(`/quran/surah/${item.number}`)}
+            onPress={() => router.push(`/quran/mushaf/${item.firstPage}`)}
           />
         )}
         ItemSeparatorComponent={() => <View style={{ height: SPACING.sm }} />}

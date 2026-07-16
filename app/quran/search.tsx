@@ -91,7 +91,7 @@ export default function QuranSearchScreen() {
           contentContainerStyle={styles.listContent}
           renderItem={({ item }) => (
             <Pressable
-              onPress={() => router.push(`/quran/surah/${item.surahNumber}?ayah=${item.ayahNumber}`)}
+              onPress={() => router.push(`/quran/mushaf/${item.page}`)}
               style={({ pressed }) => [styles.resultCard, pressed && styles.resultCardPressed]}
             >
               <View style={styles.resultHeader}>
