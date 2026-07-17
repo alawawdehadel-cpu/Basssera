@@ -91,7 +91,7 @@ export default function DecorativeSurahBanner({
           <View style={styles.row}>
             <Flourish side="right" />
             <View style={styles.center}>
-              <QuranText size={22} align="center" color={READING.barBg} lineHeightScale={1.4}>
+              <QuranText variant="surahTitle" align="center" color={READING.barBg}>
                 {surahNameArabic}
               </QuranText>
               <View style={styles.metaRow}>

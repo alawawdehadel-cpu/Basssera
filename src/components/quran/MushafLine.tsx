@@ -1,5 +1,6 @@
 import { Platform, Text, type TextStyle } from 'react-native';
 import { COLORS } from '../../constants/colors';
+import { QURAN_TYPOGRAPHY } from '../../constants/quranTypography';
 import QuranText from './QuranText';
 import type { MushafLine as MushafLineType } from '../../types/quran.types';
 
@@ -7,11 +8,19 @@ import type { MushafLine as MushafLineType } from '../../types/quran.types';
  * numberOfLines={1} compiles to overflow:hidden + text-overflow:ellipsis on
  * web, which breaks complex Arabic shaping in Chromium — and
  * adjustsFontSizeToFit is native-only anyway, so clamp only on native.
+ *
+ * minimumFontScale is intentionally HIGH (mushafMinFontScale, 0.9) so a line
+ * that is a hair too wide only shrinks a touch — every line stays visually the
+ * same size, instead of the old 0.6 that made some lines look much smaller.
  */
 const CLAMP_PROPS =
   Platform.OS === 'web'
     ? {}
-    : { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.6 };
+    : {
+        numberOfLines: 1,
+        adjustsFontSizeToFit: true,
+        minimumFontScale: QURAN_TYPOGRAPHY.mushafMinFontScale,
+      };
 
 // Web-only: widen the gaps between words so dense harakat don't make adjacent
 // words look merged at small sizes. wordSpacing only affects the U+0020 spaces
@@ -47,10 +56,10 @@ export default function MushafLine({ line, fontSize, onAyahPress }: MushafLinePr
   if (line.isBismillah) {
     return (
       <QuranText
-        size={fontSize * 0.95}
+        variant="bismillah"
+        size={fontSize}
         align="center"
         color={COLORS.forest}
-        lineHeightScale={1.85}
         {...(Platform.OS === 'web' ? {} : { numberOfLines: 1 })}
       >
         {line.text}
@@ -60,9 +69,9 @@ export default function MushafLine({ line, fontSize, onAyahPress }: MushafLinePr
 
   return (
     <QuranText
+      variant="mushaf"
       size={fontSize}
       align="center"
-      lineHeightScale={1.85}
       style={webWordSpacing(fontSize)}
       {...CLAMP_PROPS}
     >

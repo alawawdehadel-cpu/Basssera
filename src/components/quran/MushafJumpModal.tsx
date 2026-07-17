@@ -4,6 +4,7 @@ import {
   Modal,
   Pressable,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -22,6 +23,8 @@ interface MushafJumpModalProps {
   currentPage: number;
   /** Which tab to show when the sheet opens (from the tapped chip). */
   initialTab?: JumpTab;
+  soundEnabled: boolean;
+  onToggleSound: (enabled: boolean) => void;
   onClose: () => void;
   onSelectPage: (page: number) => void;
 }
@@ -44,6 +47,8 @@ export default function MushafJumpModal({
   total,
   currentPage,
   initialTab = 'page',
+  soundEnabled,
+  onToggleSound,
   onClose,
   onSelectPage,
 }: MushafJumpModalProps) {
@@ -195,12 +200,37 @@ export default function MushafJumpModal({
             )}
           />
         )}
+
+        <View style={styles.soundRow}>
+          <Text style={styles.soundLabel}>{strings.pageTurnSound}</Text>
+          <Switch
+            value={soundEnabled}
+            onValueChange={onToggleSound}
+            trackColor={{ false: READING.border, true: READING.barBg }}
+            thumbColor={soundEnabled ? READING.gold : '#f4f3f4'}
+            accessibilityLabel={strings.pageTurnSound}
+          />
+        </View>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  soundRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: SPACING.sm,
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(216,201,166,0.6)',
+  },
+  soundLabel: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: READING.ink,
+  },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(7,27,20,0.55)',

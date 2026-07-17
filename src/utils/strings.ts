@@ -155,6 +155,7 @@ export const STRINGS = {
     jumpTabJuz: 'الجزء',
     searchSurahPlaceholder: 'ابحث عن سورة…',
     close: 'إغلاق',
+    pageTurnSound: 'صوت تقليب الصفحة',
   },
   en: {
     appTitle: 'Baseera',
@@ -307,6 +308,7 @@ export const STRINGS = {
     jumpTabJuz: 'Juz',
     searchSurahPlaceholder: 'Search surah…',
     close: 'Close',
+    pageTurnSound: 'Page-turn sound',
   },
 } as const;
 

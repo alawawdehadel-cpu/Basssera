@@ -24,6 +24,13 @@ import {
   toggleBookmark,
   toggleMushafPageBookmark,
 } from '../../../src/utils/storage';
+import {
+  getPageTurnSoundEnabled,
+  playPageTurnSound,
+  preloadPageTurnSound,
+  setPageTurnSoundEnabled,
+  unloadPageTurnSound,
+} from '../../../src/utils/pageTurnSound';
 import type { MushafPage } from '../../../src/types/quran.types';
 
 export default function MushafReaderScreen() {
@@ -42,6 +49,7 @@ export default function MushafReaderScreen() {
   const [bookmarked, setBookmarked] = useState(false);
   const [showJump, setShowJump] = useState(false);
   const [jumpTab, setJumpTab] = useState<JumpTab>('page');
+  const [soundEnabled, setSoundEnabled] = useState(true);
 
   const page = useMemo(() => getMushafPage(pageNumber), [pageNumber]);
   const surahName = page?.surahs?.[0] ?? null;
@@ -56,14 +64,22 @@ export default function MushafReaderScreen() {
   useEffect(() => {
     let mounted = true;
     loadFontSize().then((s) => mounted && setFontSize(s));
+    // Preload the page-turn cue + user preference; release it on unmount.
+    preloadPageTurnSound().then(() => mounted && setSoundEnabled(getPageTurnSoundEnabled()));
     return () => {
       mounted = false;
+      unloadPageTurnSound();
     };
   }, []);
 
   const openJump = useCallback((tab: JumpTab) => {
     setJumpTab(tab);
     setShowJump(true);
+  }, []);
+
+  const handleToggleSound = useCallback((value: boolean) => {
+    setSoundEnabled(value);
+    setPageTurnSoundEnabled(value);
   }, []);
 
   useEffect(() => {
@@ -79,8 +95,12 @@ export default function MushafReaderScreen() {
 
   const goToPage = useCallback(
     (n: number) => {
+      // Single choke point for every page change (buttons, swipe/flip, jump,
+      // surah, juz). Guards against no-op / out-of-range so the cue only plays
+      // when the page actually changes — never on initial load or invalid input.
       if (n < 1 || n > total || n === pageNumber) return;
       setPageNumber(n);
+      playPageTurnSound();
     },
     [total, pageNumber],
   );
@@ -192,6 +212,8 @@ export default function MushafReaderScreen() {
           total={total}
           currentPage={pageNumber}
           initialTab={jumpTab}
+          soundEnabled={soundEnabled}
+          onToggleSound={handleToggleSound}
           onClose={() => setShowJump(false)}
           onSelectPage={goToPage}
         />

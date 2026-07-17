@@ -100,7 +100,7 @@ export default function QuranSearchScreen() {
                 </Text>
                 <Text style={styles.resultAyahNumber}>#{item.ayahNumber}</Text>
               </View>
-              <QuranText size={17} align="right" color={COLORS.forest} numberOfLines={3}>
+              <QuranText variant="search" align="right" color={COLORS.forest} numberOfLines={3}>
                 {item.textUthmani}
               </QuranText>
             </Pressable>

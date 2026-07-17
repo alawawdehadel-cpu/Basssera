@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { COLORS } from '../../constants/colors';
 import { RADIUS, SPACING } from '../../constants/spacing';
 import QuranText from '../quran/QuranText';
+import { QURAN_TYPOGRAPHY } from '../../constants/quranTypography';
 import { QURAN_SOURCE_LABEL, type QuranReference } from '../../types/answer.types';
 import type { UIStrings } from '../../utils/strings';
 
@@ -42,7 +43,8 @@ function AyahCard({ reference, strings }: { reference: QuranReference; strings: 
       </View>
       <View style={styles.body}>
         <QuranText
-          size={19}
+          variant="ayah"
+          size={QURAN_TYPOGRAPHY.relatedSize}
           align="right"
           color={COLORS.forest}
           numberOfLines={isLong && !expanded ? CLAMP_LINES : undefined}

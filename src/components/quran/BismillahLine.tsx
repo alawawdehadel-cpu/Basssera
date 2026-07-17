@@ -25,7 +25,7 @@ export default function BismillahLine({ fontSize = 24 }: BismillahLineProps) {
         <View style={styles.diamond} />
         <View style={styles.rule} />
       </View>
-      <QuranText size={fontSize * 1.02} align="center" color={READING.ink} lineHeightScale={1.65}>
+      <QuranText variant="bismillah" size={fontSize} align="center" color={READING.ink}>
         {BISMILLAH}
       </QuranText>
     </View>

@@ -57,7 +57,7 @@ export default function AyahCard({
           <StarIcon filled={bookmarked} />
         </Pressable>
       </View>
-      <QuranText size={fontSize} align="right" color={COLORS.forest}>
+      <QuranText variant="ayah" size={fontSize} align="right" color={COLORS.forest}>
         {overrideText ?? ayah.textUthmani}
       </QuranText>
     </View>
