@@ -13,12 +13,15 @@
     "build:mushaf": "node scripts/fetchMushafLayout.js"
   },
   "dependencies": {
+    "@expo-google-fonts/amiri": "^0.2.3",
+    "@expo-google-fonts/ibm-plex-sans-arabic": "^0.2.3",
     "@react-native-async-storage/async-storage": "1.23.1",
     "expo": "~51.0.28",
     "expo-av": "~14.0.7",
     "expo-clipboard": "~6.0.3",
     "expo-constants": "~16.0.2",
     "expo-font": "~12.0.10",
+    "expo-linear-gradient": "~13.0.2",
     "expo-linking": "~6.3.1",
     "expo-router": "~3.5.23",
     "expo-status-bar": "~1.12.1",
