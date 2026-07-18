@@ -23,6 +23,7 @@ import {
 import { useToast } from '../src/components/basirah/Toast';
 import Txt from '../src/components/basirah/Txt';
 import VerseActionSheet from '../src/components/basirah/VerseActionSheet';
+import MushafPage from '../src/components/basirah/mushaf/MushafPage';
 import { usePlayback, RECITERS } from '../src/hooks/usePlayback';
 import { FONT_STEP_LABELS, useSettings } from '../src/hooks/useSettings';
 import { useUserData } from '../src/hooks/useUserData';
@@ -443,39 +444,48 @@ export default function ReaderScreen() {
                 ],
               }}
             >
-              <View
-                style={{
-                  borderWidth: 1.5,
-                  borderColor: colors.gold,
-                  borderRadius: 16,
-                  padding: 8,
-                }}
-              >
+              {mode === 'mushaf' && mushafPage ? (
+                <MushafPage
+                  page={mushafPage}
+                  fontStep={fontStep}
+                  selectedKey={selectedKey}
+                  onAyahPress={openVerse}
+                />
+              ) : (
                 <View
                   style={{
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    borderRadius: 11,
-                    paddingVertical: 18,
-                    paddingHorizontal: 16,
+                    borderWidth: 1.5,
+                    borderColor: colors.gold,
+                    borderRadius: 16,
+                    padding: 8,
                   }}
                 >
-                  {mode === 'mushaf' ? renderMushafLines() : renderReadingFlow()}
                   <View
                     style={{
-                      marginTop: 18,
-                      paddingTop: 12,
-                      borderTopWidth: 1,
-                      borderStyle: 'dashed',
-                      borderTopColor: colors.border,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      borderRadius: 11,
+                      paddingVertical: 18,
+                      paddingHorizontal: 16,
                     }}
                   >
-                    <Txt size={9.5} color={colors.text3} align="center">
-                      النص القرآني معروض من مصدر معتمد (نسخة عثمانية موثّقة)
-                    </Txt>
+                    {mode === 'mushaf' ? renderMushafLines() : renderReadingFlow()}
+                    <View
+                      style={{
+                        marginTop: 18,
+                        paddingTop: 12,
+                        borderTopWidth: 1,
+                        borderStyle: 'dashed',
+                        borderTopColor: colors.border,
+                      }}
+                    >
+                      <Txt size={9.5} color={colors.text3} align="center">
+                        النص القرآني معروض من مصدر معتمد (نسخة عثمانية موثّقة)
+                      </Txt>
+                    </View>
                   </View>
                 </View>
-              </View>
+              )}
             </Animated.View>
           </ScrollView>
         </Pressable>
