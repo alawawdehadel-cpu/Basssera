@@ -1,4 +1,5 @@
 import { Text, type StyleProp, type TextProps, type TextStyle } from 'react-native';
+import { useAppLanguage } from '../../hooks/useAppLanguage';
 import { FONT, uiFamily, type UiWeight } from '../../theme/fonts';
 
 interface TxtProps extends TextProps {
@@ -22,14 +23,17 @@ export default function Txt({
   size = 14,
   weight = 400,
   color,
-  align = 'right',
+  align,
   lh,
   amiri = false,
   style,
   children,
   ...rest
 }: TxtProps) {
+  const { isRTL, direction } = useAppLanguage();
   const family = amiri ? (weight >= 600 ? FONT.amiriBold : FONT.amiri) : uiFamily(weight);
+  // Default alignment follows the UI language; an explicit `align` still wins.
+  const resolvedAlign = align ?? (isRTL ? 'right' : 'left');
   return (
     <Text
       {...rest}
@@ -38,8 +42,8 @@ export default function Txt({
           fontFamily: family,
           fontSize: size,
           color,
-          textAlign: align,
-          writingDirection: 'rtl',
+          textAlign: resolvedAlign,
+          writingDirection: direction,
           ...(lh ? { lineHeight: size * lh } : null),
         },
         style,

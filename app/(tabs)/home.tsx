@@ -13,6 +13,7 @@ import {
   ProgressBar,
   SectionHeader,
 } from '../../src/components/basirah/primitives';
+import PrayerTimesCard from '../../src/components/basirah/prayer/PrayerTimesCard';
 import { useToast } from '../../src/components/basirah/Toast';
 import Txt from '../../src/components/basirah/Txt';
 import { usePlayback, RECITERS } from '../../src/hooks/usePlayback';
@@ -20,9 +21,10 @@ import { useUserData, WIRD_GOAL_PAGES } from '../../src/hooks/useUserData';
 import { FONT } from '../../src/theme/fonts';
 import { getHijriDateLabel } from '../../src/theme/hijri';
 import { useTheme } from '../../src/theme/ThemeContext';
+import { useAppLanguage } from '../../src/hooks/useAppLanguage';
 import { LAYOUT } from '../../src/theme/tokens';
 import type { QuranAyah, LastMushafPosition } from '../../src/types/quran.types';
-import { stripSurahPrefix, toArabicDigits } from '../../src/utils/numerals';
+import { formatNumber, stripSurahPrefix } from '../../src/utils/numerals';
 import { getAyah, getSurahMeta, loadQuranData } from '../../src/utils/quranDataLoader';
 import { getSurahsOnMushafPage } from '../../src/utils/mushafLayout';
 import { loadLastMushafPage, loadLastPosition } from '../../src/utils/storage';
@@ -37,16 +39,17 @@ function verseOfDayIndex(total: number): number {
 }
 
 const FEATURES = [
-  { title: 'القرآن الكريم', icon: 'book' as const, gold: false, href: '/(tabs)/quran' },
-  { title: 'التفسير', icon: 'layers' as const, gold: true, href: 'tafsir' },
-  { title: 'البحث الذكي', icon: 'search' as const, gold: false, href: '/(tabs)/search' },
-  { title: 'اسأل بصيرة', icon: 'spark' as const, gold: true, href: '/(tabs)/assistant' },
-  { title: 'التلاوات', icon: 'headphones' as const, gold: false, href: '/(tabs)/recitations' },
-  { title: 'العلامات المرجعية', icon: 'bookmark' as const, gold: true, href: '/(tabs)/library' },
+  { titleKey: 'home.feature.quran' as const, icon: 'book' as const, gold: false, href: '/(tabs)/quran' },
+  { titleKey: 'home.feature.tafsir' as const, icon: 'layers' as const, gold: true, href: 'tafsir' },
+  { titleKey: 'home.feature.search' as const, icon: 'search' as const, gold: false, href: '/(tabs)/search' },
+  { titleKey: 'home.feature.assistant' as const, icon: 'spark' as const, gold: true, href: '/(tabs)/assistant' },
+  { titleKey: 'home.feature.recitations' as const, icon: 'headphones' as const, gold: false, href: '/(tabs)/recitations' },
+  { titleKey: 'home.feature.bookmarks' as const, icon: 'bookmark' as const, gold: true, href: '/(tabs)/library' },
 ];
 
 export default function HomeScreen() {
   const { colors, isDark, toggleTheme } = useTheme();
+  const { t, lang } = useAppLanguage();
   const { showToast } = useToast();
   const { startTrack } = usePlayback();
   const { bookmarks, wirdPagesRead, isBookmarked, toggleVerseBookmark } = useUserData();
@@ -63,7 +66,7 @@ export default function HomeScreen() {
     loadLastPosition().then(setLastPosition);
   }, []);
 
-  const hijri = useMemo(() => getHijriDateLabel(), []);
+  const hijri = useMemo(() => getHijriDateLabel(new Date(), lang), [lang]);
 
   const continuePage = lastPage?.pageNumber ?? 1;
   const continueSurah = stripSurahPrefix(
@@ -86,7 +89,7 @@ export default function HomeScreen() {
       surahNameArabic: verseOfDay.surahNameArabic,
       surahNameEnglish: verseOfDay.surahNameEnglish,
     });
-    showToast(added ? 'تمت إضافة العلامة' : 'أُزيلت العلامة');
+    showToast(added ? t('bookmark.added') : t('bookmark.removed'));
   };
 
   const latestBookmarks = useMemo(
@@ -110,7 +113,7 @@ export default function HomeScreen() {
             <LogoTile />
             <View>
               <Txt size={15} weight={700} color={colors.text}>
-                السلام عليكم
+                {t('home.greeting')}
               </Txt>
               <Txt size={11.5} color={colors.text2}>
                 {hijri}
@@ -118,9 +121,9 @@ export default function HomeScreen() {
             </View>
           </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <IconButton icon={isDark ? 'sun' : 'moon'} onPress={toggleTheme} label="تبديل المظهر" />
-            <IconButton icon="bell" badge label="الإشعارات" onPress={() => showToast('لا إشعارات جديدة')} />
-            <IconButton icon="gear" label="الإعدادات" iconSize={20} onPress={() => router.push('/settings')} />
+            <IconButton icon={isDark ? 'sun' : 'moon'} onPress={toggleTheme} label={t('home.themeToggle')} />
+            <IconButton icon="bell" badge label={t('home.notifications')} onPress={() => showToast(t('home.noNotifications'))} />
+            <IconButton icon="gear" label={t('common.settings')} iconSize={20} onPress={() => router.push('/settings')} />
           </View>
         </View>
 
@@ -169,14 +172,14 @@ export default function HomeScreen() {
               }}
             >
               <Txt size={11} weight={600} color="#DFC96C">
-                ✦ وِردك اليوم
+                {t('home.wirdBadge')}
               </Txt>
             </View>
             <Txt size={21} weight={700} color="#F7F2E5" style={{ marginBottom: 6 }}>
-              خصّص دقائق للتدبر
+              {t('home.wirdTitle')}
             </Txt>
             <Txt size={13} color="rgba(247,242,229,.75)" style={{ marginBottom: 16 }}>
-              أكملت {toArabicDigits(wirdPagesRead)} من {toArabicDigits(WIRD_GOAL_PAGES)} صفحات لهذا اليوم
+              {t('home.wirdProgress', { done: formatNumber(wirdPagesRead), goal: formatNumber(WIRD_GOAL_PAGES) })}
             </Txt>
             <View
               style={{ height: 8, borderRadius: 5, backgroundColor: 'rgba(255,255,255,.15)', overflow: 'hidden', marginBottom: 16 }}
@@ -201,7 +204,7 @@ export default function HomeScreen() {
               }}
             >
               <Txt size={14} weight={700} color={colors.emerald2}>
-                ابدأ الورد
+                {t('home.wirdCta')}
               </Txt>
             </Press>
           </LinearGradient>
@@ -228,14 +231,14 @@ export default function HomeScreen() {
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Txt size={11} color={colors.text2} style={{ marginBottom: 3 }}>
-                تابع القراءة
+                {t('home.continueReading')}
               </Txt>
               <Txt size={15} weight={700} color={colors.text}>
-                سورة {continueSurah}
+                {t('common.surah')} {continueSurah}
               </Txt>
               <Txt size={11.5} color={colors.text2} style={{ marginVertical: 5 }}>
-                الصفحة {toArabicDigits(continuePage)}
-                {lastPosition ? ` • الآية ${toArabicDigits(lastPosition.ayahNumber)}` : ''}
+                {t('common.page')} {formatNumber(continuePage)}
+                {lastPosition ? ` • ${t('common.ayah')} ${formatNumber(lastPosition.ayahNumber)}` : ''}
               </Txt>
               <ProgressBar fraction={continuePage / TOTAL_MUSHAF_PAGES} height={5} />
             </View>
@@ -254,11 +257,14 @@ export default function HomeScreen() {
           </Card>
         </Press>
 
+        {/* مواقيت الصلاة */}
+        <PrayerTimesCard />
+
         {/* feature grid */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 11, marginBottom: 26 }}>
           {FEATURES.map((f) => (
             <Press
-              key={f.title}
+              key={f.titleKey}
               onPress={() => {
                 if (f.href === 'tafsir') {
                   const s = lastPosition?.surahNumber ?? 1;
@@ -299,7 +305,7 @@ export default function HomeScreen() {
                 />
               </View>
               <Txt size={12} weight={600} color={colors.text} align="center">
-                {f.title}
+                {t(f.titleKey)}
               </Txt>
             </Press>
           ))}
@@ -307,7 +313,7 @@ export default function HomeScreen() {
 
         {/* آية اليوم */}
         <SectionHeader
-          title="آية اليوم"
+          title={t('home.verseOfDay')}
           trailing={
             <Txt size={11} weight={600} color={colors.gold}>
               ✦
@@ -328,7 +334,7 @@ export default function HomeScreen() {
             <>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                 <Txt size={12} weight={700} color={colors.emerald}>
-                  سورة {stripSurahPrefix(verseOfDay.surahNameArabic)} • الآية {toArabicDigits(verseOfDay.ayahNumber)}
+                  {t('common.surah')} {stripSurahPrefix(verseOfDay.surahNameArabic)} • {t('common.ayah')} {formatNumber(verseOfDay.ayahNumber)}
                 </Txt>
                 <AyahBadge number={verseOfDay.ayahNumber} />
               </View>
@@ -360,7 +366,7 @@ export default function HomeScreen() {
                       ayahCount: meta?.ayahCount ?? 10,
                       reciter: RECITERS[1],
                     });
-                    showToast('جارٍ التشغيل');
+                    showToast(t('playback.starting'));
                   }}
                   style={{
                     flex: 1,
@@ -375,7 +381,7 @@ export default function HomeScreen() {
                 >
                   <Icon name="play" size={15} color={colors.text} />
                   <Txt size={12} weight={600} color={colors.text}>
-                    استمع
+                    {t('home.listen')}
                   </Txt>
                 </Press>
                 <Press
@@ -398,7 +404,7 @@ export default function HomeScreen() {
                     filled={vodBookmarked}
                   />
                   <Txt size={12} weight={600} color={vodBookmarked ? colors.gold : colors.text}>
-                    احفظ
+                    {t('home.saveVerse')}
                   </Txt>
                 </Press>
                 <Press
@@ -421,7 +427,7 @@ export default function HomeScreen() {
                 >
                   <Icon name="book" size={15} color={colors.text} />
                   <Txt size={12} weight={600} color={colors.text}>
-                    تفسير
+                    {t('home.tafsir')}
                   </Txt>
                 </Press>
               </View>
@@ -431,8 +437,8 @@ export default function HomeScreen() {
 
         {/* استمع الآن */}
         <SectionHeader
-          title="استمع الآن"
-          actionLabel="عرض الكل"
+          title={t('home.listenNow')}
+          actionLabel={t('common.viewAll')}
           onAction={() => router.push('/(tabs)/recitations')}
         />
         <ScrollView
@@ -456,23 +462,23 @@ export default function HomeScreen() {
                 </LinearGradient>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Txt size={12.5} weight={700} color={colors.text} numberOfLines={1}>
-                    {r.name}
+                    {t(r.nameKey)}
                   </Txt>
                   <Txt size={10.5} color={colors.text2}>
-                    {r.type}
+                    {t(r.typeKey)}
                   </Txt>
                 </View>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Txt size={11} color={colors.text2}>
-                  سورة الملك
+                  {t('common.surah')} {t('surah.mulk')}
                 </Txt>
                 <Press
                   onPress={() => {
                     startTrack({ surahNumber: 67, surahName: 'الملك', ayahCount: 30, reciter: r });
-                    showToast('جارٍ التشغيل');
+                    showToast(t('playback.starting'));
                   }}
-                  accessibilityLabel="تشغيل"
+                  accessibilityLabel={t('player.play')}
                   style={{
                     width: 34,
                     height: 34,
@@ -493,8 +499,8 @@ export default function HomeScreen() {
         {latestBookmarks.length > 0 ? (
           <>
             <SectionHeader
-              title="آخر المحفوظات"
-              actionLabel="عرض الكل"
+              title={t('home.recentSaved')}
+              actionLabel={t('common.viewAll')}
               onAction={() => router.push('/(tabs)/library')}
             />
             <View style={{ gap: 10 }}>
@@ -523,7 +529,7 @@ export default function HomeScreen() {
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Txt size={13} weight={700} color={colors.text}>
-                        سورة {stripSurahPrefix(b.surahNameArabic)} • الآية {toArabicDigits(b.ayahNumber)}
+                        {t('common.surah')} {stripSurahPrefix(b.surahNameArabic)} • {t('common.ayah')} {formatNumber(b.ayahNumber)}
                       </Txt>
                       <Txt size={11.5} color={colors.text2} numberOfLines={1}>
                         {b.text}

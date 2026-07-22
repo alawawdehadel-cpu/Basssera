@@ -11,24 +11,28 @@ import Txt from '../../src/components/basirah/Txt';
 import { useUserData } from '../../src/hooks/useUserData';
 import { FONT } from '../../src/theme/fonts';
 import { useTheme } from '../../src/theme/ThemeContext';
+import { useAppLanguage } from '../../src/hooks/useAppLanguage';
 import { LAYOUT } from '../../src/theme/tokens';
-import { stripSurahPrefix, toArabicDigits } from '../../src/utils/numerals';
+import { formatNumber, stripSurahPrefix } from '../../src/utils/numerals';
 import { getAyah } from '../../src/utils/quranDataLoader';
 
-const TABS = ['العلامات', 'الملاحظات', 'المحفوظات', 'سجل القراءة'];
+const TAB_KEYS = ['library.tab.bookmarks', 'library.tab.notes', 'library.tab.saved', 'library.tab.history'] as const;
 
-function relativeTime(at: number): string {
+type Translate = ReturnType<typeof useAppLanguage>['t'];
+
+function relativeTime(at: number, t: Translate): string {
   const days = Math.floor((Date.now() - at) / 86_400_000);
-  if (days <= 0) return 'أُضيفت اليوم';
-  if (days === 1) return 'أُضيفت أمس';
-  if (days < 7) return `أُضيفت قبل ${toArabicDigits(days)} أيام`;
-  if (days < 14) return 'أُضيفت قبل أسبوع';
-  if (days < 30) return `أُضيفت قبل ${toArabicDigits(Math.floor(days / 7))} أسابيع`;
-  return `أُضيفت قبل ${toArabicDigits(Math.floor(days / 30))} أشهر`;
+  if (days <= 0) return t('library.addedToday');
+  if (days === 1) return t('library.addedYesterday');
+  if (days < 7) return t('library.addedDaysAgo', { n: formatNumber(days) });
+  if (days < 14) return t('library.addedWeekAgo');
+  if (days < 30) return t('library.addedWeeksAgo', { n: formatNumber(Math.floor(days / 7)) });
+  return t('library.addedMonthsAgo', { n: formatNumber(Math.floor(days / 30)) });
 }
 
 export default function LibraryScreen() {
   const { colors } = useTheme();
+  const { t } = useAppLanguage();
   const { showToast } = useToast();
   const { bookmarks, notes, savedAnswers, readingLog, toggleVerseBookmark, removeSavedAnswer } = useUserData();
   const [tab, setTab] = useState(0);
@@ -37,10 +41,10 @@ export default function LibraryScreen() {
 
   const collections = useMemo(
     () => [
-      { name: 'العلامات', count: bookmarks.length, icon: 'bookmark' as const },
-      { name: 'الملاحظات', count: noteEntries.length, icon: 'pencil' as const },
-      { name: 'الإجابات المحفوظة', count: savedAnswers.length, icon: 'spark' as const },
-      { name: 'سجل القراءة', count: readingLog.length, icon: 'clock' as const },
+      { name: t('library.tab.bookmarks'), count: bookmarks.length, icon: 'bookmark' as const },
+      { name: t('library.tab.notes'), count: noteEntries.length, icon: 'pencil' as const },
+      { name: t('library.savedAnswers'), count: savedAnswers.length, icon: 'spark' as const },
+      { name: t('library.tab.history'), count: readingLog.length, icon: 'clock' as const },
     ],
     [bookmarks.length, noteEntries.length, savedAnswers.length, readingLog.length],
   );
@@ -49,25 +53,25 @@ export default function LibraryScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
         <Txt size={24} weight={700} color={colors.text} style={{ marginHorizontal: LAYOUT.screenX, marginTop: 8, marginBottom: 16 }}>
-          مكتبتي
+          {t('library.title')}
         </Txt>
 
         <View style={{ marginHorizontal: LAYOUT.screenX, marginBottom: 16 }}>
-          <SegmentedTabs items={TABS} active={tab} onChange={setTab} height={36} />
+          <SegmentedTabs items={TAB_KEYS.map((k) => t(k))} active={tab} onChange={setTab} height={36} />
         </View>
 
         {/* collections rail */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: LAYOUT.screenX, marginBottom: 12 }}>
           <Txt size={15} weight={700} color={colors.text}>
-            المجموعات
+            {t('library.collections')}
           </Txt>
           <Press
-            onPress={() => showToast('إنشاء مجموعة جديدة غير متاح بعد')}
+            onPress={() => showToast(t('library.createUnavailable'))}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
           >
             <Icon name="plus" size={14} color={colors.emerald} strokeWidth={2} />
             <Txt size={12} weight={600} color={colors.emerald}>
-              إنشاء
+              {t('common.create')}
             </Txt>
           </Press>
         </View>
@@ -105,7 +109,7 @@ export default function LibraryScreen() {
                   {c.name}
                 </Txt>
                 <Txt size={11} color={colors.text2}>
-                  {toArabicDigits(c.count)} عنصر
+                  {formatNumber(c.count)} {t('common.item')}
                 </Txt>
               </LinearGradient>
             </View>
@@ -118,9 +122,9 @@ export default function LibraryScreen() {
             bookmarks.length === 0 ? (
               <EmptyState
                 icon="bookmark"
-                title="لم تحفظ أي آية بعد"
-                body="يمكنك الضغط على رمز العلامة أثناء القراءة للعودة إلى الآية لاحقًا."
-                ctaLabel="ابدأ القراءة"
+                title={t('quran.noBookmarks')}
+                body={t('quran.noBookmarksBody')}
+                ctaLabel={t('quran.startReading')}
                 onCta={() => router.push('/reader')}
               />
             ) : (
@@ -138,10 +142,10 @@ export default function LibraryScreen() {
                         <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
                           <View>
                             <Txt size={13.5} weight={700} color={colors.emerald} style={{ marginBottom: 2 }}>
-                              سورة {stripSurahPrefix(b.surahNameArabic)} • الآية {toArabicDigits(b.ayahNumber)}
+                              {t('common.surah')} {stripSurahPrefix(b.surahNameArabic)} • {t('common.ayah')} {formatNumber(b.ayahNumber)}
                             </Txt>
                             <Txt size={10.5} color={colors.text2}>
-                              {relativeTime(b.createdAt)}
+                              {relativeTime(b.createdAt, t)}
                             </Txt>
                           </View>
                           <Press
@@ -153,9 +157,9 @@ export default function LibraryScreen() {
                                 surahNameArabic: b.surahNameArabic,
                                 surahNameEnglish: b.surahNameEnglish,
                               });
-                              showToast('أُزيلت العلامة');
+                              showToast(t('bookmark.removed'));
                             }}
-                            accessibilityLabel="إزالة العلامة"
+                            accessibilityLabel={t('library.removeBookmark')}
                             style={{ width: 32, height: 32, borderRadius: 9, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' }}
                           >
                             <Icon name="bookmark" size={16} color={colors.gold} filled />
@@ -189,9 +193,9 @@ export default function LibraryScreen() {
             noteEntries.length === 0 ? (
               <EmptyState
                 icon="pencil"
-                title="لا ملاحظات بعد"
-                body="اكتب ملاحظة على أي آية من ورقة إجراءات الآية لتظهر هنا."
-                ctaLabel="ابدأ القراءة"
+                title={t('library.notesEmpty')}
+                body={t('library.notesEmptyBody')}
+                ctaLabel={t('quran.startReading')}
                 onCta={() => router.push('/reader')}
               />
             ) : (
@@ -208,7 +212,7 @@ export default function LibraryScreen() {
                       style={{ borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, padding: 15 }}
                     >
                       <Txt size={13} weight={700} color={colors.emerald} style={{ marginBottom: 8 }}>
-                        سورة {stripSurahPrefix(ayah?.surahNameArabic ?? '')} • الآية {toArabicDigits(a)}
+                        {t('common.surah')} {stripSurahPrefix(ayah?.surahNameArabic ?? '')} • {t('common.ayah')} {formatNumber(a)}
                       </Txt>
                       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: colors.goldTint, padding: 11, borderRadius: 12 }}>
                         <Icon name="pencil" size={14} color={colors.gold} strokeWidth={1.7} />
@@ -227,9 +231,9 @@ export default function LibraryScreen() {
             savedAnswers.length === 0 ? (
               <EmptyState
                 icon="spark"
-                title="لا إجابات محفوظة"
-                body="احفظ إجابات «اسأل بصيرة» للرجوع إليها لاحقًا من زر الحفظ أسفل الإجابة."
-                ctaLabel="اسأل بصيرة"
+                title={t('library.savedEmpty')}
+                body={t('library.savedEmptyBody')}
+                ctaLabel={t('assistant.title')}
                 onCta={() => router.push('/(tabs)/assistant')}
               />
             ) : (
@@ -243,7 +247,7 @@ export default function LibraryScreen() {
                           {ans.question}
                         </Txt>
                       </View>
-                      <Press onPress={() => { removeSavedAnswer(ans.id); showToast('حُذفت الإجابة'); }} accessibilityLabel="حذف">
+                      <Press onPress={() => { removeSavedAnswer(ans.id); showToast(t('library.answerDeleted')); }} accessibilityLabel={t('library.delete')}>
                         <Icon name="close" size={16} color={colors.text3} strokeWidth={1.8} />
                       </Press>
                     </View>
@@ -260,9 +264,9 @@ export default function LibraryScreen() {
             readingLog.length === 0 ? (
               <EmptyState
                 icon="clock"
-                title="لا سجل قراءة بعد"
-                body="سيظهر هنا آخر ما قرأته من صفحات المصحف تلقائيًا."
-                ctaLabel="ابدأ القراءة"
+                title={t('library.historyEmpty')}
+                body={t('library.historyEmptyBody')}
+                ctaLabel={t('quran.startReading')}
                 onCta={() => router.push('/reader')}
               />
             ) : (
@@ -285,11 +289,11 @@ export default function LibraryScreen() {
                     <AyahBadge number={e.page} size={34} />
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Txt size={13.5} weight={700} color={colors.text}>
-                        سورة {stripSurahPrefix(e.surahName)}
+                        {t('common.surah')} {stripSurahPrefix(e.surahName)}
                       </Txt>
                       <Txt size={11} color={colors.text2}>
-                        الصفحة {toArabicDigits(e.page)}
-                        {e.ayahNumber ? ` • الآية ${toArabicDigits(e.ayahNumber)}` : ''}
+                        {t('common.page')} {formatNumber(e.page)}
+                        {e.ayahNumber ? ` • ${t('common.ayah')} ${formatNumber(e.ayahNumber)}` : ''}
                       </Txt>
                     </View>
                     <Icon name="chevronBack" size={16} color={colors.text2} strokeWidth={1.9} />

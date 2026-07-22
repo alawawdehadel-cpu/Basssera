@@ -16,18 +16,19 @@ import Txt from '../../src/components/basirah/Txt';
 import { useUserData } from '../../src/hooks/useUserData';
 import { FONT } from '../../src/theme/fonts';
 import { useTheme } from '../../src/theme/ThemeContext';
+import { useAppLanguage } from '../../src/hooks/useAppLanguage';
 import { LAYOUT } from '../../src/theme/tokens';
 import type { LastReadingPosition, SurahListItem } from '../../src/types/quran.types';
 import { TOTAL_MUSHAF_PAGES } from '../../src/types/quran.types';
 import { getJuzStartPages } from '../../src/utils/juzPages';
-import { stripSurahPrefix, toArabicDigits, toArabicPercent } from '../../src/utils/numerals';
+import { formatNumber, stripSurahPrefix, toArabicPercent } from '../../src/utils/numerals';
 import { getAyah, getSurahList } from '../../src/utils/quranDataLoader';
 import { loadLastPosition } from '../../src/utils/storage';
 import { getSurahOpeningMeta } from '../../src/utils/surahOpening';
 import { normalizeText } from '../../src/utils/textNormalizer';
 
-const TABS = ['السور', 'الأجزاء', 'الصفحات', 'العلامات'];
-const FILTERS = ['الكل', 'مكية', 'مدنية'] as const;
+const TAB_KEYS = ['quran.tab.surahs', 'quran.tab.juz', 'quran.tab.pages', 'quran.tab.bookmarks'] as const;
+const FILTER_KEYS = ['quran.filter.all', 'common.meccan', 'common.medinan'] as const;
 
 /** 12-pointed medallion behind the surah number. */
 function Medallion({ children }: { children: React.ReactNode }) {
@@ -50,6 +51,7 @@ function Medallion({ children }: { children: React.ReactNode }) {
 
 export default function QuranIndexScreen() {
   const { colors } = useTheme();
+  const { t } = useAppLanguage();
   const { bookmarks } = useUserData();
   const [tab, setTab] = useState(0);
   const [filter, setFilter] = useState(0);
@@ -102,7 +104,7 @@ export default function QuranIndexScreen() {
       >
         <Medallion>
           <Txt size={13} weight={700} color={colors.emerald} align="center">
-            {toArabicDigits(s.number)}
+            {formatNumber(s.number)}
           </Txt>
         </Medallion>
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -110,7 +112,7 @@ export default function QuranIndexScreen() {
             {stripSurahPrefix(s.nameArabic)}
           </Txt>
           <Txt size={11.5} color={colors.text2}>
-            {meta.revelationType === 'medinan' ? 'مدنية' : 'مكية'} • {toArabicDigits(s.ayahCount)} آية
+            {meta.revelationType === 'medinan' ? t('common.medinan') : t('common.meccan')} • {formatNumber(s.ayahCount)} {t('common.ayahCount')}
           </Txt>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -129,7 +131,7 @@ export default function QuranIndexScreen() {
             </View>
           ) : null}
           <Txt size={19} amiri color={colors.gold} style={{ opacity: 0.7 }}>
-            ﴾{toArabicDigits(s.number)}﴿
+            ﴾{formatNumber(s.number)}﴿
           </Txt>
         </View>
       </Press>
@@ -148,11 +150,11 @@ export default function QuranIndexScreen() {
         }}
       >
         <Txt size={24} weight={700} color={colors.text}>
-          القرآن الكريم
+          {t('quran.title')}
         </Txt>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <IconButton icon="search" size={38} iconSize={18} label="بحث" onPress={() => searchRef.current?.focus()} />
-          <IconButton icon="menu" size={38} iconSize={18} label="إعدادات" onPress={() => router.push('/settings')} />
+          <IconButton icon="search" size={38} iconSize={18} label={t('quran.searchLabel')} onPress={() => searchRef.current?.focus()} />
+          <IconButton icon="menu" size={38} iconSize={18} label={t('common.settings')} onPress={() => router.push('/settings')} />
         </View>
       </View>
 
@@ -175,7 +177,7 @@ export default function QuranIndexScreen() {
           ref={searchRef}
           value={query}
           onChangeText={setQuery}
-          placeholder="ابحث باسم السورة أو رقم الصفحة"
+          placeholder={t('quran.searchPlaceholder')}
           placeholderTextColor={colors.text2}
           style={{
             flex: 1,
@@ -189,13 +191,13 @@ export default function QuranIndexScreen() {
       </View>
 
       <View style={{ marginBottom: 16 }}>
-        <SegmentedTabs items={TABS} active={tab} onChange={setTab} />
+        <SegmentedTabs items={TAB_KEYS.map((k) => t(k))} active={tab} onChange={setTab} />
       </View>
 
       {tab === 0 ? (
         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-          {FILTERS.map((f, i) => (
-            <Chip key={f} label={f} active={filter === i} onPress={() => setFilter(i)} />
+          {FILTER_KEYS.map((f, i) => (
+            <Chip key={f} label={t(f)} active={filter === i} onPress={() => setFilter(i)} />
           ))}
         </View>
       ) : null}
@@ -244,10 +246,10 @@ export default function QuranIndexScreen() {
                       }}
                     >
                       <Txt size={16} weight={700} color={colors.emerald} align="center">
-                        {toArabicDigits(j)}
+                        {formatNumber(j)}
                       </Txt>
                       <Txt size={10} color={colors.text2} align="center">
-                        الجزء
+                        {t('common.juz')}
                       </Txt>
                     </Press>
                   ))}
@@ -257,7 +259,7 @@ export default function QuranIndexScreen() {
               {tab === 2 ? (
                 <View style={{ paddingTop: 8 }}>
                   <Txt size={12} color={colors.text2} style={{ marginBottom: 16 }}>
-                    أدخل رقم الصفحة ({toArabicDigits(1)} - {toArabicDigits(TOTAL_MUSHAF_PAGES)})
+                    {t('quran.pageRange', { from: formatNumber(1), to: formatNumber(TOTAL_MUSHAF_PAGES) })}
                   </Txt>
                   <View
                     style={{
@@ -289,11 +291,11 @@ export default function QuranIndexScreen() {
                       }}
                     />
                     <Txt size={12} color={colors.text2}>
-                      / {toArabicDigits(TOTAL_MUSHAF_PAGES)}
+                      / {formatNumber(TOTAL_MUSHAF_PAGES)}
                     </Txt>
                   </View>
                   <PrimaryButton
-                    title="انتقال"
+                    title={t('quran.go')}
                     height={50}
                     onPress={() => {
                       const western = pageInput.replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
@@ -310,9 +312,9 @@ export default function QuranIndexScreen() {
                 bookmarks.length === 0 ? (
                   <EmptyState
                     icon="bookmark"
-                    title="لم تحفظ أي آية بعد"
-                    body="يمكنك الضغط على رمز العلامة أثناء القراءة للعودة إلى الآية لاحقًا."
-                    ctaLabel="ابدأ القراءة"
+                    title={t('quran.noBookmarks')}
+                    body={t('quran.noBookmarksBody')}
+                    ctaLabel={t('quran.startReading')}
                     onCta={() => router.push('/reader')}
                   />
                 ) : (
@@ -352,7 +354,7 @@ export default function QuranIndexScreen() {
                           </View>
                           <View style={{ flex: 1, minWidth: 0 }}>
                             <Txt size={13} weight={700} color={colors.text}>
-                              سورة {stripSurahPrefix(b.surahNameArabic)} • الآية {toArabicDigits(b.ayahNumber)}
+                              {t('common.surah')} {stripSurahPrefix(b.surahNameArabic)} • {t('common.ayah')} {formatNumber(b.ayahNumber)}
                             </Txt>
                             {ayah ? (
                               <Txt size={11.5} color={colors.text2} numberOfLines={1}>
@@ -361,7 +363,7 @@ export default function QuranIndexScreen() {
                             ) : null}
                           </View>
                           <Txt size={11} color={colors.text2}>
-                            ص {toArabicDigits(ayah?.page ?? 0)}
+                            {t('common.page')} {formatNumber(ayah?.page ?? 0)}
                           </Txt>
                         </Press>
                       );

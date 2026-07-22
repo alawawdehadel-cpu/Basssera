@@ -8,14 +8,16 @@ import Icon from '../src/components/basirah/Icon';
 import { Press } from '../src/components/basirah/primitives';
 import { useToast } from '../src/components/basirah/Toast';
 import Txt from '../src/components/basirah/Txt';
+import { useAppLanguage } from '../src/hooks/useAppLanguage';
 import { usePlayback } from '../src/hooks/usePlayback';
 import { FONT } from '../src/theme/fonts';
 import { useTheme } from '../src/theme/ThemeContext';
 import { getAyah } from '../src/utils/quranDataLoader';
-import { stripSurahPrefix, toArabicDigits, toArabicTime } from '../src/utils/numerals';
+import { formatNumber, stripSurahPrefix, toArabicTime } from '../src/utils/numerals';
 
 export default function PlayerScreen() {
   const { colors } = useTheme();
+  const { t } = useAppLanguage();
   const { showToast } = useToast();
   const { track, playing, position, duration, speed, repeatOn, togglePlay, seekBy, cycleSpeed, toggleRepeat } =
     usePlayback();
@@ -33,10 +35,10 @@ export default function PlayerScreen() {
   const currentAyah = getAyah(track.surahNumber, currentAyahNumber);
 
   const secondaryButtons: { label: string; icon: Parameters<typeof Icon>[0]['name']; active?: boolean; onPress: () => void }[] = [
-    { label: `السرعة ${toArabicDigits(speed % 1 === 0 ? speed : speed.toFixed(2))}×`, icon: 'bolt', active: speed !== 1, onPress: cycleSpeed },
-    { label: 'مؤقت', icon: 'timer', onPress: () => showToast('مؤقت النوم غير متاح في هذه النسخة') },
-    { label: 'تكرار', icon: 'repeat', active: repeatOn, onPress: toggleRepeat },
-    { label: 'تنزيل', icon: 'download', onPress: () => showToast('التنزيل غير متاح في هذه النسخة') },
+    { label: t('player.speed', { value: formatNumber(speed % 1 === 0 ? speed : speed.toFixed(2)) }), icon: 'bolt', active: speed !== 1, onPress: cycleSpeed },
+    { label: t('player.timer'), icon: 'timer', onPress: () => showToast(t('player.timerUnavailable')) },
+    { label: t('player.repeat'), icon: 'repeat', active: repeatOn, onPress: toggleRepeat },
+    { label: t('player.download'), icon: 'download', onPress: () => showToast(t('player.downloadUnavailable')) },
   ];
 
   return (
@@ -53,17 +55,17 @@ export default function PlayerScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 }}>
               <Press
                 onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/recitations'))}
-                accessibilityLabel="إغلاق"
+                accessibilityLabel={t('player.close')}
                 style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,.1)', alignItems: 'center', justifyContent: 'center' }}
               >
                 <Icon name="chevronDown" size={22} color="#F7F2E5" strokeWidth={1.9} />
               </Press>
               <Txt size={12} color="rgba(247,242,229,.7)">
-                يُشغّل الآن
+                {t('player.nowPlaying')}
               </Txt>
               <Press
-                onPress={() => showToast('لا خيارات إضافية')}
-                accessibilityLabel="خيارات"
+                onPress={() => showToast(t('player.noOptions'))}
+                accessibilityLabel={t('player.options')}
                 style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,.1)', alignItems: 'center', justifyContent: 'center' }}
               >
                 <Icon name="dots" size={22} color="#F7F2E5" />
@@ -102,13 +104,13 @@ export default function PlayerScreen() {
                 </Svg>
               </View>
               <Txt size={28} weight={700} amiri color="#F7F2E5" align="center">
-                سورة {stripSurahPrefix(track.surahName)}
+                {t('common.surah')} {stripSurahPrefix(track.surahName)}
               </Txt>
               <Txt size={14} color="#DFC96C" align="center" style={{ marginTop: 6 }}>
-                {track.reciter.name}
+                {t(track.reciter.nameKey)}
               </Txt>
               <Txt size={11.5} color="rgba(247,242,229,.6)" align="center" style={{ marginTop: 4 }}>
-                سورة {toArabicDigits(track.surahNumber)} • {toArabicDigits(track.ayahCount)} آية
+                {t('player.surahMeta', { number: formatNumber(track.surahNumber), count: formatNumber(track.ayahCount) })}
               </Txt>
             </View>
 
@@ -134,15 +136,15 @@ export default function PlayerScreen() {
 
             {/* transport */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
-              <Press onPress={() => seekBy(-duration)} accessibilityLabel="السابق" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+              <Press onPress={() => seekBy(-duration)} accessibilityLabel={t('player.prev')} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
                 <Icon name="skipPrev" size={26} color="#F7F2E5" />
               </Press>
-              <Press onPress={() => seekBy(-10)} accessibilityLabel="تأخير ١٠ ثوانٍ" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+              <Press onPress={() => seekBy(-10)} accessibilityLabel={t('player.seekBack')} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
                 <Icon name="seekBack10" size={24} color="#F7F2E5" strokeWidth={1.7} />
               </Press>
               <Press
                 onPress={togglePlay}
-                accessibilityLabel={playing ? 'إيقاف مؤقت' : 'تشغيل'}
+                accessibilityLabel={playing ? t('player.pause') : t('player.play')}
                 style={{
                   width: 72,
                   height: 72,
@@ -159,10 +161,10 @@ export default function PlayerScreen() {
               >
                 <Icon name={playing ? 'pause' : 'play'} size={30} color={colors.emerald2} />
               </Press>
-              <Press onPress={() => seekBy(10)} accessibilityLabel="تقديم ١٠ ثوانٍ" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+              <Press onPress={() => seekBy(10)} accessibilityLabel={t('player.seekForward')} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
                 <Icon name="seekFwd10" size={24} color="#F7F2E5" strokeWidth={1.7} />
               </Press>
-              <Press onPress={() => seekBy(duration)} accessibilityLabel="التالي" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+              <Press onPress={() => seekBy(duration)} accessibilityLabel={t('player.next')} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
                 <Icon name="skipNext" size={26} color="#F7F2E5" />
               </Press>
             </View>
@@ -200,7 +202,7 @@ export default function PlayerScreen() {
               }}
             >
               <Txt size={10} color="#DFC96C" style={{ marginBottom: 6 }}>
-                الآية الحالية • مزامنة التلاوة ({toArabicDigits(currentAyahNumber)})
+                {t('player.currentAyah', { n: formatNumber(currentAyahNumber) })}
               </Txt>
               <Txt size={19} lh={1.9} align="center" color="#F7F2E5" style={{ fontFamily: FONT.quran }} numberOfLines={3}>
                 {currentAyah?.textUthmani ?? '﴿ … ﴾'}

@@ -8,31 +8,33 @@ import { ArchFrame } from '../src/components/basirah/LogoMark';
 import { Press, PrimaryButton } from '../src/components/basirah/primitives';
 import Txt from '../src/components/basirah/Txt';
 import { useTheme } from '../src/theme/ThemeContext';
+import { useAppLanguage } from '../src/hooks/useAppLanguage';
 import { ONBOARDED_KEY } from './index';
 
 const SLIDES = [
   {
-    title: 'القرآن الكريم بين يديك',
-    desc: 'اقرأ القرآن الكريم بخطٍّ واضح وتجربةٍ مريحة مصمّمة للتدبر والتركيز.',
-    caption: 'مصحف مفتوح',
-    btn: 'التالي',
+    titleKey: 'onboarding.s1.title',
+    descKey: 'onboarding.s1.desc',
+    captionKey: 'onboarding.s1.caption',
+    btnKey: 'onboarding.next' as const,
   },
   {
-    title: 'افهم الآيات بعمق',
-    desc: 'استكشف تفاسير موثوقة، أسباب النزول، ومعاني الكلمات بسهولة.',
-    caption: 'صفحة + بطاقات معرفة',
-    btn: 'التالي',
+    titleKey: 'onboarding.s2.title',
+    descKey: 'onboarding.s2.desc',
+    captionKey: 'onboarding.s2.caption',
+    btnKey: 'onboarding.next' as const,
   },
   {
-    title: 'اسأل بصيرة',
-    desc: 'ابحث عن الآيات والموضوعات، واحصل على إجاباتٍ مرتبطة بالمصادر والتفاسير المعتمدة.',
-    caption: 'محادثة ذكية + مصادر',
-    btn: 'ابدأ رحلتك',
+    titleKey: 'onboarding.s3.title',
+    descKey: 'onboarding.s3.desc',
+    captionKey: 'onboarding.s3.caption',
+    btnKey: 'onboarding.start',
   },
-];
+] as const;
 
 export default function OnboardingScreen() {
   const { colors } = useTheme();
+  const { t } = useAppLanguage();
   const [index, setIndex] = useState(0);
   const float = useRef(new Animated.Value(0)).current;
   const fade = useRef(new Animated.Value(1)).current;
@@ -76,9 +78,9 @@ export default function OnboardingScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top', 'bottom']}>
       {/* skip — trailing (left) edge per spec */}
       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 24, paddingTop: 14 }}>
-        <Press onPress={finish} accessibilityLabel="تخطي">
+        <Press onPress={finish} accessibilityLabel={t('onboarding.skip')}>
           <Txt size={14} weight={600} color={colors.text2}>
-            تخطي
+            {t('onboarding.skip')}
           </Txt>
         </Press>
       </View>
@@ -143,15 +145,15 @@ export default function OnboardingScreen() {
               fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
             }}
           >
-            {slide.caption}
+            {t(slide.captionKey)}
           </Txt>
         </View>
 
         <Txt size={26} weight={700} color={colors.text} align="center" style={{ marginBottom: 14 }}>
-          {slide.title}
+          {t(slide.titleKey)}
         </Txt>
         <Txt size={15} lh={1.9} color={colors.text2} align="center" style={{ maxWidth: 300 }}>
-          {slide.desc}
+          {t(slide.descKey)}
         </Txt>
       </Animated.View>
 
@@ -169,7 +171,7 @@ export default function OnboardingScreen() {
             />
           ))}
         </View>
-        <PrimaryButton title={slide.btn} onPress={next} />
+        <PrimaryButton title={t(slide.btnKey)} onPress={next} />
       </View>
     </SafeAreaView>
   );

@@ -6,6 +6,7 @@ import { Animated, Easing, Pressable, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { ArchFrame, BookStarGlyph } from '../src/components/basirah/LogoMark';
 import Txt from '../src/components/basirah/Txt';
+import { useAppLanguage } from '../src/hooks/useAppLanguage';
 
 export const ONBOARDED_KEY = 'basirah-onboarded-v1';
 
@@ -18,6 +19,7 @@ const SPLASH_MS = 2300;
  */
 export default function SplashScreen() {
   const spin = useRef(new Animated.Value(0)).current;
+  const { t } = useAppLanguage();
   const navigatedRef = useRef(false);
 
   useEffect(() => {
@@ -110,10 +112,10 @@ export default function SplashScreen() {
             بصيرة
           </Txt>
           <Txt size={15} weight={500} color="#DFC96C" align="center" style={{ marginTop: 14 }}>
-            القرآن بفهمٍ أعمق
+            {t('splash.tagline')}
           </Txt>
           <Txt size={12} color="rgba(247,242,229,.55)" align="center" style={{ marginTop: 8 }}>
-            اقرأ، تدبّر، واستمع
+            {t('splash.sub')}
           </Txt>
         </View>
 

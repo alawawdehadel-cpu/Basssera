@@ -23,7 +23,13 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "نحتاج إلى موقعك لحساب مواقيت الصلاة بدقة حسب مدينتك. لا يتم تتبع موقعك في الخلفية."
+        }
+      ]
     ]
   }
 }

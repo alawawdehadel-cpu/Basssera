@@ -1,6 +1,6 @@
 import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { toArabicDigits } from '../../utils/numerals';
+import { formatNumber } from '../../utils/numerals';
 import Icon, { type IconName } from './Icon';
 import Txt from './Txt';
 
@@ -319,7 +319,7 @@ export function AyahBadge({ number, size = 26 }: { number: number | string; size
       }}
     >
       <Txt size={size * 0.42} weight={700} color="#fff" align="center">
-        {toArabicDigits(number)}
+        {formatNumber(number)}
       </Txt>
     </View>
   );

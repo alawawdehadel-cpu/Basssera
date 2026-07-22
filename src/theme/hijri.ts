@@ -1,4 +1,3 @@
-import { toArabicDigits } from '../utils/numerals';
 
 /**
  * Hijri (Umm al-Qura) date label for the Home header, e.g.
@@ -6,10 +5,14 @@ import { toArabicDigits } from '../utils/numerals';
  * available; falls back to the Gregorian Arabic date rather than guessing
  * a Hijri conversion.
  */
-export function getHijriDateLabel(date: Date = new Date()): string {
+export function getHijriDateLabel(date: Date = new Date(), lang: 'ar' | 'en' = 'ar'): string {
+  const locale = lang === 'ar' ? 'ar' : 'en';
+  const hijriLocale =
+    lang === 'ar' ? 'ar-SA-u-ca-islamic-umalqura-nu-arab' : 'en-u-ca-islamic-umalqura';
+  const suffix = lang === 'ar' ? 'هـ' : ' AH';
   try {
-    const weekday = new Intl.DateTimeFormat('ar', { weekday: 'long' }).format(date);
-    const parts = new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura-nu-arab', {
+    const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(date);
+    const parts = new Intl.DateTimeFormat(hijriLocale, {
       day: 'numeric',
       month: 'long',
       year: 'numeric',
@@ -19,13 +22,13 @@ export function getHijriDateLabel(date: Date = new Date()): string {
     const month = get('month');
     const year = get('year');
     if (day && month && year) {
-      return `${weekday}، ${day} ${month} ${year}هـ`;
+      return lang === 'ar' ? `${weekday}، ${day} ${month} ${year}${suffix}` : `${weekday}, ${day} ${month} ${year}${suffix}`;
     }
   } catch {
     /* fall through to Gregorian */
   }
   try {
-    const fmt = new Intl.DateTimeFormat('ar', {
+    const fmt = new Intl.DateTimeFormat(locale, {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
@@ -33,6 +36,6 @@ export function getHijriDateLabel(date: Date = new Date()): string {
     });
     return fmt.format(date);
   } catch {
-    return toArabicDigits(date.toLocaleDateString('ar'));
+    return date.toLocaleDateString(locale);
   }
 }

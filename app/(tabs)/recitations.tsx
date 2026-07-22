@@ -10,21 +10,23 @@ import Txt from '../../src/components/basirah/Txt';
 import { usePlayback, RECITERS } from '../../src/hooks/usePlayback';
 import { FONT } from '../../src/theme/fonts';
 import { useTheme } from '../../src/theme/ThemeContext';
+import { useAppLanguage } from '../../src/hooks/useAppLanguage';
 import { LAYOUT } from '../../src/theme/tokens';
-import { toArabicDigits } from '../../src/utils/numerals';
+import { formatNumber } from '../../src/utils/numerals';
 
-const TABS = ['القراء', 'السور', 'التنزيلات', 'قوائمي'];
-const FILTERS = ['حفص عن عاصم', 'ترتيل', 'تجويد', 'جودة عالية', 'متاح دون إنترنت'];
+const TAB_KEYS = ['recitations.tab.reciters', 'recitations.tab.surahs', 'recitations.tab.downloads', 'recitations.tab.myLists'] as const;
+const FILTER_KEYS = ['recitations.filter.hafs', 'recitations.filter.tarteel', 'recitations.filter.tajweed', 'recitations.filter.highQuality', 'recitations.filter.offline'] as const;
 
 export default function RecitationsScreen() {
   const { colors } = useTheme();
+  const { t } = useAppLanguage();
   const { showToast } = useToast();
   const { startTrack } = usePlayback();
   const [tab, setTab] = useState(0);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState('');
 
-  const filtered = RECITERS.filter((r) => !query.trim() || r.name.includes(query.trim()));
+  const filtered = RECITERS.filter((r) => !query.trim() || t(r.nameKey).includes(query.trim()));
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
@@ -33,7 +35,7 @@ export default function RecitationsScreen() {
         contentContainerStyle={{ paddingBottom: 24 }}
       >
         <Txt size={24} weight={700} color={colors.text} style={{ marginHorizontal: LAYOUT.screenX, marginTop: 8, marginBottom: 16 }}>
-          التلاوات
+          {t('recitations.title')}
         </Txt>
 
         <View
@@ -55,14 +57,14 @@ export default function RecitationsScreen() {
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="ابحث عن قارئ أو سورة"
+            placeholder={t('recitations.searchPlaceholder')}
             placeholderTextColor={colors.text2}
             style={{ flex: 1, fontFamily: FONT.ui400, fontSize: 13, color: colors.text, textAlign: 'right', paddingVertical: 0 }}
           />
         </View>
 
         <View style={{ marginHorizontal: LAYOUT.screenX, marginBottom: 16 }}>
-          <SegmentedTabs items={TABS} active={tab} onChange={setTab} height={36} />
+          <SegmentedTabs items={TAB_KEYS.map((k) => t(k))} active={tab} onChange={setTab} height={36} />
         </View>
 
         <ScrollView
@@ -70,7 +72,7 @@ export default function RecitationsScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: LAYOUT.screenX, gap: 8, paddingBottom: 16 }}
         >
-          {FILTERS.map((f) => (
+          {FILTER_KEYS.map((f) => (
             <View
               key={f}
               style={{
@@ -83,14 +85,14 @@ export default function RecitationsScreen() {
               }}
             >
               <Txt size={11.5} color={colors.text2}>
-                {f}
+                {t(f)}
               </Txt>
             </View>
           ))}
         </ScrollView>
 
         <Txt size={15} weight={700} color={colors.text} style={{ marginHorizontal: LAYOUT.screenX, marginBottom: 12 }}>
-          {tab === 3 ? 'قوائمي' : 'القرّاء'}
+          {tab === 3 ? t('recitations.tab.myLists') : t('recitations.reciters')}
         </Txt>
 
         <View style={{ paddingHorizontal: LAYOUT.screenX, gap: 10 }}>
@@ -122,18 +124,18 @@ export default function RecitationsScreen() {
                 </LinearGradient>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Txt size={14} weight={700} color={colors.text}>
-                    {r.name}
+                    {t(r.nameKey)}
                   </Txt>
                   <Txt size={11.5} color={colors.text2}>
-                    {r.type} • {toArabicDigits(114)} سورة
+                    {t(r.typeKey)} • {formatNumber(114)} {t('quran.tab.surahs')}
                   </Txt>
                 </View>
                 <Press
                   onPress={() => {
                     setFavorites((prev) => ({ ...prev, [r.id]: !prev[r.id] }));
-                    showToast(fav ? 'أُزيلت من المفضلة' : 'أُضيفت إلى المفضلة');
+                    showToast(fav ? t('recitations.favRemoved') : t('recitations.favAdded'));
                   }}
-                  accessibilityLabel="مفضلة"
+                  accessibilityLabel={t('recitations.favorite')}
                   style={{
                     width: 36,
                     height: 36,
@@ -150,7 +152,7 @@ export default function RecitationsScreen() {
                     startTrack({ surahNumber: 67, surahName: 'الملك', ayahCount: 30, reciter: r });
                     router.push('/player');
                   }}
-                  accessibilityLabel="تشغيل"
+                  accessibilityLabel={t('player.play')}
                   style={{
                     width: 42,
                     height: 42,

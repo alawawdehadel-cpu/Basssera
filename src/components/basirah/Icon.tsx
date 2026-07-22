@@ -52,7 +52,11 @@ export type IconName =
   | 'heart'
   | 'arrowGo'
   | 'clock'
-  | 'close';
+  | 'close'
+  | 'mapPin'
+  | 'refresh'
+  | 'sunrise'
+  | 'sunset';
 
 interface IconProps {
   name: IconName;
@@ -340,6 +344,42 @@ const DEFS: Record<IconName, Def> = {
     ),
   },
   close: { node: () => <Path d="M18 6L6 18M6 6l12 12" /> },
+  mapPin: {
+    node: () => (
+      <>
+        <Path d="M12 21.5s7-6.3 7-11.2a7 7 0 1 0-14 0c0 4.9 7 11.2 7 11.2z" />
+        <Circle cx={12} cy={10} r={2.6} />
+      </>
+    ),
+  },
+  refresh: {
+    node: () => (
+      <>
+        <Path d="M20.5 12a8.5 8.5 0 1 1-2.4-5.9" />
+        <Path d="M20.5 3.5V9H15" />
+      </>
+    ),
+  },
+  sunrise: {
+    node: () => (
+      <>
+        <Path d="M17 17a5 5 0 0 0-10 0" />
+        <Path d="M12 2.5V7M4.6 9.6l1.5 1.5M17.9 11.1l1.5-1.5M2 17h2M20 17h2" />
+        <Path d="M9 21h6" />
+        <Path d="M9.5 5 12 2.5 14.5 5" />
+      </>
+    ),
+  },
+  sunset: {
+    node: () => (
+      <>
+        <Path d="M17 17a5 5 0 0 0-10 0" />
+        <Path d="M12 7V2.5M4.6 9.6l1.5 1.5M17.9 11.1l1.5-1.5M2 17h2M20 17h2" />
+        <Path d="M9 21h6" />
+        <Path d="M9.5 4.5 12 7l2.5-2.5" />
+      </>
+    ),
+  },
 };
 
 export default function Icon({

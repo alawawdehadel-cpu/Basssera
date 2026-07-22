@@ -6,6 +6,26 @@
 
 const EASTERN_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
 
+/**
+ * Digit locale for display. Set once by the language provider so formatting
+ * helpers stay synchronous and callers don't have to thread `lang` through
+ * every component. Pure helpers below still accept an explicit language.
+ */
+let numeralLanguage: 'ar' | 'en' = 'ar';
+
+export function setNumeralLanguage(lang: 'ar' | 'en'): void {
+  numeralLanguage = lang;
+}
+
+export function getNumeralLanguage(): 'ar' | 'en' {
+  return numeralLanguage;
+}
+
+/** Arabic-Indic digits in Arabic, Latin digits in English. */
+export function formatNumber(value: number | string, lang: 'ar' | 'en' = numeralLanguage): string {
+  return lang === 'ar' ? toArabicDigits(value) : String(value);
+}
+
 export function toArabicDigits(value: number | string): string {
   return String(value)
     .split('')

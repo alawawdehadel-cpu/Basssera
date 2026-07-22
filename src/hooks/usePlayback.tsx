@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import type { TranslationKey } from '../i18n/translations';
 
 /**
  * Playback state for the Recitations player + persistent mini-player.
@@ -20,17 +21,18 @@ import {
 
 export interface Reciter {
   id: string;
-  name: string;
-  type: string;
+  /** Translation keys — reciter names are shown in the active language. */
+  nameKey: TranslationKey;
+  typeKey: TranslationKey;
   mono: string;
   gradient: [string, string];
 }
 
 export const RECITERS: Reciter[] = [
-  { id: 'abdulbasit', name: 'عبد الباسط عبد الصمد', type: 'مجوّد', mono: 'ع', gradient: ['#0F6B50', '#084C3C'] },
-  { id: 'afasy', name: 'مشاري راشد العفاسي', type: 'مرتّل', mono: 'م', gradient: ['#C9A227', '#9C7D1C'] },
-  { id: 'muaiqly', name: 'ماهر المعيقلي', type: 'مرتّل', mono: 'م', gradient: ['#0F6B50', '#153C33'] },
-  { id: 'ghamdi', name: 'سعد الغامدي', type: 'مرتّل', mono: 'س', gradient: ['#2E7D64', '#084C3C'] },
+  { id: 'abdulbasit', nameKey: 'reciter.abdulbasit', typeKey: 'reciter.type.mujawwad', mono: 'ع', gradient: ['#0F6B50', '#084C3C'] },
+  { id: 'afasy', nameKey: 'reciter.afasy', typeKey: 'reciter.type.murattal', mono: 'م', gradient: ['#C9A227', '#9C7D1C'] },
+  { id: 'muaiqly', nameKey: 'reciter.muaiqly', typeKey: 'reciter.type.murattal', mono: 'م', gradient: ['#0F6B50', '#153C33'] },
+  { id: 'ghamdi', nameKey: 'reciter.ghamdi', typeKey: 'reciter.type.murattal', mono: 'س', gradient: ['#2E7D64', '#084C3C'] },
 ];
 
 export interface PlaybackTrack {

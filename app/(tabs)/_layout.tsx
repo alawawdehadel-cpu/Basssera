@@ -1,4 +1,5 @@
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import type { TranslationKey } from '../../src/i18n/translations';
 import { Tabs } from 'expo-router';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,21 +8,22 @@ import MiniPlayer from '../../src/components/basirah/MiniPlayer';
 import { Press } from '../../src/components/basirah/primitives';
 import Txt from '../../src/components/basirah/Txt';
 import { useTheme } from '../../src/theme/ThemeContext';
+import { useAppLanguage } from '../../src/hooks/useAppLanguage';
 
 interface TabDef {
   route: string;
-  label: string;
+  labelKey: TranslationKey;
   icon: IconName;
   /** The المساعد tab highlights gold instead of emerald, per spec. */
   gold?: boolean;
 }
 
 const TAB_DEFS: TabDef[] = [
-  { route: 'home', label: 'الرئيسية', icon: 'home' },
-  { route: 'quran', label: 'القرآن', icon: 'bookOpen' },
-  { route: 'search', label: 'البحث', icon: 'search' },
-  { route: 'assistant', label: 'المساعد', icon: 'spark', gold: true },
-  { route: 'library', label: 'مكتبتي', icon: 'bookmark' },
+  { route: 'home', labelKey: 'nav.home', icon: 'home' },
+  { route: 'quran', labelKey: 'nav.quran', icon: 'bookOpen' },
+  { route: 'search', labelKey: 'nav.search', icon: 'search' },
+  { route: 'assistant', labelKey: 'nav.assistant', icon: 'spark', gold: true },
+  { route: 'library', labelKey: 'nav.library', icon: 'bookmark' },
 ];
 
 /** Routes that keep the tab bar but highlight another tab. */
@@ -29,6 +31,7 @@ const ALIAS: Record<string, string> = { recitations: 'library' };
 
 function BasirahTabBar({ state, navigation }: BottomTabBarProps) {
   const { colors } = useTheme();
+  const { t } = useAppLanguage();
   const insets = useSafeAreaInsets();
 
   const currentRoute = state.routes[state.index]?.name ?? 'home';
@@ -59,7 +62,7 @@ function BasirahTabBar({ state, navigation }: BottomTabBarProps) {
           return (
             <Press
               key={tab.route}
-              accessibilityLabel={tab.label}
+              accessibilityLabel={t(tab.labelKey)}
               onPress={() => {
                 const target = state.routes.find((r) => r.name === tab.route);
                 if (target) navigation.navigate(target.name as never);
@@ -79,7 +82,7 @@ function BasirahTabBar({ state, navigation }: BottomTabBarProps) {
                 <Icon name={tab.icon} size={21} color={color} filled={tab.route === 'library' && active} />
               </View>
               <Txt size={10} weight={600} color={color} align="center">
-                {tab.label}
+                {t(tab.labelKey)}
               </Txt>
             </Press>
           );

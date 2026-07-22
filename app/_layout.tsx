@@ -15,6 +15,7 @@ import { ActivityIndicator, I18nManager, Platform, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ToastProvider } from '../src/components/basirah/Toast';
 import { PlaybackProvider } from '../src/hooks/usePlayback';
+import { PrayerTimesProvider } from '../src/hooks/usePrayerTimes';
 import { SettingsProvider } from '../src/hooks/useSettings';
 import { useUserData, UserDataProvider } from '../src/hooks/useUserData';
 import { LanguageProvider } from '../src/hooks/useAppLanguage';
@@ -59,6 +60,7 @@ function ThemedApp() {
         <Stack.Screen name="tafsir" />
         <Stack.Screen name="player" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="prayer-times" />
         <Stack.Screen name="about" />
       </Stack>
     </>
@@ -92,7 +94,9 @@ export default function RootLayout() {
             <UserDataProvider>
               <PlaybackProvider>
                 <ToastProvider>
-                  <ThemedApp />
+                  <PrayerTimesProvider>
+                    <ThemedApp />
+                  </PrayerTimesProvider>
                 </ToastProvider>
               </PlaybackProvider>
             </UserDataProvider>

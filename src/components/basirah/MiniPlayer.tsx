@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { View } from 'react-native';
 import { FONT } from '../../theme/fonts';
 import { useTheme } from '../../theme/ThemeContext';
+import { useAppLanguage } from '../../hooks/useAppLanguage';
 import { usePlayback } from '../../hooks/usePlayback';
 import { stripSurahPrefix } from '../../utils/numerals';
 import Icon from './Icon';
@@ -14,6 +15,7 @@ import Txt from './Txt';
  */
 export default function MiniPlayer() {
   const { colors } = useTheme();
+  const { t } = useAppLanguage();
   const { track, playing, togglePlay } = usePlayback();
 
   if (!track) return null;
@@ -41,7 +43,7 @@ export default function MiniPlayer() {
     >
       <Press
         onPress={() => router.push('/player')}
-        accessibilityLabel="فتح المشغّل"
+        accessibilityLabel={t('player.openPlayer')}
         style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 11, minWidth: 0 }}
       >
         <View
@@ -60,16 +62,16 @@ export default function MiniPlayer() {
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Txt size={12.5} weight={700} color="#F7F2E5" numberOfLines={1}>
-            سورة {stripSurahPrefix(track.surahName)}
+            {t('common.surah')} {stripSurahPrefix(track.surahName)}
           </Txt>
           <Txt size={10.5} color="rgba(247,242,229,.7)" numberOfLines={1}>
-            {track.reciter.name}
+            {t(track.reciter.nameKey)}
           </Txt>
         </View>
       </Press>
       <Press
         onPress={togglePlay}
-        accessibilityLabel={playing ? 'إيقاف مؤقت' : 'تشغيل'}
+        accessibilityLabel={playing ? t('player.pause') : t('player.play')}
         style={{
           width: 38,
           height: 38,
