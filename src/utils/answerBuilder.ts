@@ -6,9 +6,16 @@ import type {
   SafetyLevel,
   TafsirReference,
 } from '../types/answer.types';
+import type {
+  TafsirAssistantExplanation,
+  TafsirSourceGroup,
+} from '../types/answer.types';
 import { QURAN_SOURCE_LABEL, TAFSIR_SOURCE_LABEL } from '../types/answer.types';
+import type { TafsirSearchMatch, TafsirSourceId } from '../types/data.types';
 import type { SearchResult } from './chatbotSearch';
 import { FATWA_NOTICE_AR, FATWA_NOTICE_EN } from './chatbotSearch';
+import { createArabicExcerpt, extractiveExcerpt } from './tafsir/tafsirExcerpt';
+import { sourceShortName, TAFSIR_DISPLAY_ORDER } from './tafsirSources';
 
 /**
  * ============================================================
@@ -65,6 +72,134 @@ function buildTafsirReferences(result: SearchResult, quranRefs: QuranReference[]
       excerpt: excerptOf(result.answer),
     },
   ];
+}
+
+/* ------------------------------------------------------------------ */
+/* Multi-source tafsir answers (السعدي / ابن كثير / الطبري)             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Groups per-source matches into one card per source, in the fixed display
+ * order (السعدي → ابن كثير → الطبري) regardless of retrieval order. Passages
+ * of the same source are ordered by ayah and de-duplicated by
+ * source+surah+ayahStart+ayahEnd+explanation. A source with only a "not found"
+ * marker becomes an empty group flagged `notFound`.
+ */
+function buildTafsirGroups(matches: TafsirSearchMatch[]): TafsirSourceGroup[] {
+  const bySource = new Map<TafsirSourceId, TafsirSourceGroup>();
+  const seen = new Set<string>();
+
+  for (const m of matches) {
+    let group = bySource.get(m.source);
+    if (!group) {
+      group = {
+        source: m.source,
+        sourceArabic: m.sourceArabic,
+        surahName: m.surahName,
+        passages: [],
+        notFound: false,
+      };
+      bySource.set(m.source, group);
+    }
+
+    if (m.notFound) {
+      // Only "missing" if the source contributed no real passage at all.
+      if (group.passages.length === 0) group.notFound = true;
+      continue;
+    }
+
+    const key = `${m.source}|${m.surahNumber}|${m.ayahStart}|${m.ayahEnd}|${m.explanation}`;
+    if (seen.has(key)) continue; // no identical text twice
+    seen.add(key);
+
+    group.notFound = false;
+    group.surahName = m.surahName;
+    group.passages.push({
+      source: m.source,
+      sourceArabic: m.sourceArabic,
+      surahNumber: m.surahNumber,
+      surahName: m.surahName,
+      ayahStart: m.ayahStart,
+      ayahEnd: m.ayahEnd,
+      explanation: m.explanation,
+      excerpt: createArabicExcerpt(m.explanation, 600),
+    });
+  }
+
+  for (const group of bySource.values()) {
+    group.passages.sort((a, b) => a.ayahStart - b.ayahStart || a.ayahEnd - b.ayahEnd);
+  }
+
+  // Emit strictly in canonical display order, keeping only sources present.
+  return TAFSIR_DISPLAY_ORDER.filter((id) => bySource.has(id)).map(
+    (id) => bySource.get(id)!,
+  );
+}
+
+/**
+ * Builds the «شرح المساعد» section DETERMINISTICALLY (this app has no
+ * generative-AI backend). It quotes a short, complete opening extract from
+ * each DISPLAYED source's text — verbatim, never paraphrased, never using
+ * outside knowledge — and lists exactly the sources it drew from. It is
+ * explicitly labeled as an extract, not a scholarly conclusion, so it can
+ * never be mistaken for an AI-generated fatwa or synthesis.
+ */
+function buildAssistantExplanation(
+  groups: TafsirSourceGroup[],
+): TafsirAssistantExplanation | undefined {
+  const found = groups.filter((g) => !g.notFound && g.passages.length > 0);
+  if (found.length === 0) return undefined;
+
+  const lines = found.map((g) => {
+    // First complete sentence(s) of the source's first passage, verbatim.
+    const snippet = extractiveExcerpt(g.passages[0].explanation, 200);
+    return `• ${g.sourceArabic}: «${snippet}»`;
+  });
+
+  const intro =
+    found.length > 1
+      ? 'هذه خلاصة مستخلَصة حرفيًا من مطالع النصوص المعروضة أعلاه (اقتباس مباشر دون توليد أو إضافة من خارجها):'
+      : 'هذه خلاصة مستخلَصة حرفيًا من مطلع النص المعروض أعلاه (اقتباس مباشر دون توليد أو إضافة من خارجه):';
+
+  const basedOnSources = found.map((g) => g.source);
+  const basedOnLine = `بناءً على: ${found.map((g) => sourceShortName(g.source)).join('، ')}`;
+
+  return {
+    title: 'شرح المساعد',
+    text: `${intro}\n\n${lines.join('\n\n')}\n\n${basedOnLine}`,
+    basedOnSources,
+    extractive: true,
+  };
+}
+
+/** The cited ayah(s), de-duplicated (a comparison repeats the same ayah). */
+function buildMultiQuranReferences(matches: TafsirSearchMatch[]): QuranReference[] {
+  const seen = new Set<string>();
+  const refs: QuranReference[] = [];
+  for (const m of matches) {
+    if (m.notFound || !m.ayahText) continue;
+    const key = `${m.surahName}|${m.ayahRange}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    refs.push({ surah: m.surahName, ayah: m.ayahRange, text: m.ayahText });
+  }
+  return refs;
+}
+
+/** One tafsir badge per DISTINCT source present in the answer, + a Quran badge. */
+function buildMultiSources(
+  matches: TafsirSearchMatch[],
+  hasQuranRefs: boolean,
+): AnswerSource[] {
+  const sources: AnswerSource[] = [];
+  const seen = new Set<string>();
+  for (const m of matches) {
+    if (seen.has(m.source)) continue;
+    seen.add(m.source);
+    sources.push({ label: m.sourceArabic, type: 'tafsir' });
+  }
+  if (hasQuranRefs) sources.push({ label: QURAN_SOURCE_LABEL, type: 'quran' });
+  return sources;
 }
 
 function buildSources(result: SearchResult, lang: AppLanguage, hasQuranRefs: boolean): AnswerSource[] {
@@ -145,6 +280,34 @@ export function buildChatAnswer(result: SearchResult, lang: AppLanguage): ChatAn
       sources: [],
       safetyNote: lang === 'ar' ? FATWA_NOTICE_AR : FATWA_NOTICE_EN,
       confidence: 'low',
+    };
+  }
+
+  // Multi-source tafsir answer: one labeled card per source (السعدي / ابن
+  // كثير / الطبري), never merged. `answer` is the short header; the cards
+  // carry each source's verbatim text (collapsed in the UI).
+  if (result.tafsirMatches && result.tafsirMatches.length > 0) {
+    const quranReferences = buildMultiQuranReferences(result.tafsirMatches);
+    const tafsirGroups = buildTafsirGroups(result.tafsirMatches);
+    const sources = buildMultiSources(result.tafsirMatches, quranReferences.length > 0);
+    const assistantExplanation = buildAssistantExplanation(tafsirGroups);
+    const missingSources = tafsirGroups
+      .filter((g) => g.notFound)
+      .map((g) => g.source);
+    const baseSummary =
+      result.answer ?? (lang === 'ar' ? NO_SOURCE_FOUND_AR : NO_SOURCE_FOUND_EN);
+    return {
+      title: result.title,
+      summary: result.note ? `${baseSummary}\n${result.note}` : baseSummary,
+      quranReferences,
+      // The grouped, source-titled cards are the multi-tafsir presentation;
+      // tafsirReferences stays empty here so the two never double-render.
+      tafsirReferences: [],
+      tafsirGroups,
+      assistantExplanation,
+      missingSources: missingSources.length > 0 ? missingSources : undefined,
+      sources,
+      confidence: computeConfidence(result),
     };
   }
 

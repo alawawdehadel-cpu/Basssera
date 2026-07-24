@@ -10,7 +10,11 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "build:mushaf": "node scripts/fetchMushafLayout.js"
+    "build:mushaf": "node scripts/fetchMushafLayout.js",
+    "inspect:tafsir": "node scripts/inspectTafsirData.js",
+    "validate:tafsir": "node scripts/validateTafsirData.js",
+    "test:tafsir": "node scripts/testTafsirEngine.js",
+    "build:tafsir-chunks": "node scripts/buildTafsirChunks.js"
   },
   "dependencies": {
     "@expo-google-fonts/amiri": "^0.2.3",

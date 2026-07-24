@@ -82,6 +82,17 @@ export function loadQuranData(): Promise<QuranAyah[]> {
   return Promise.resolve(ayahs!);
 }
 
+/**
+ * Synchronous full ayah list. The mushaf JSON is bundled and parsed lazily
+ * on first access, so this never blocks on I/O — it's used by the tafsir
+ * question analyzer, which resolves Quran phrases inside the otherwise
+ * synchronous search pipeline.
+ */
+export function getQuranAyahs(): QuranAyah[] {
+  ensureLoaded();
+  return ayahs!;
+}
+
 /** 114-surah summary list, derived once from quran.json. */
 export function getSurahList(): SurahListItem[] {
   ensureLoaded();

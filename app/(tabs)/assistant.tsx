@@ -7,11 +7,15 @@ import EvidenceCard from '../../src/components/basirah/EvidenceCard';
 import AssistantHadithSection from '../../src/components/basirah/hadith/AssistantHadithSection';
 import Icon from '../../src/components/basirah/Icon';
 import { Press } from '../../src/components/basirah/primitives';
+import TafsirSourceCard from '../../src/components/basirah/TafsirSourceCard';
+import TafsirResultCard from '../../src/components/chat/TafsirResultCard';
 import { useToast } from '../../src/components/basirah/Toast';
 import Txt from '../../src/components/basirah/Txt';
 import { useAppLanguage } from '../../src/hooks/useAppLanguage';
 import { useAssistant, type AssistantTurn } from '../../src/hooks/useAssistant';
 import { useUserData } from '../../src/hooks/useUserData';
+import type { TafsirSourceId } from '../../src/types/data.types';
+import { ALL_TAFSIR_SOURCE_IDS, TAFSIR_SOURCES } from '../../src/utils/tafsirSources';
 import { formatNumber } from '../../src/utils/numerals';
 import { FONT } from '../../src/theme/fonts';
 import { useTheme } from '../../src/theme/ThemeContext';
@@ -114,6 +118,64 @@ function PulsingSpark() {
       >
         <Icon name="spark" size={22} color="#DFC96C" strokeWidth={1.8} />
       </View>
+    </View>
+  );
+}
+
+type SourceKey = 'all' | TafsirSourceId;
+
+/** RTL single-select chip row for the active tafsir source. */
+function SourceSelector({
+  value,
+  onChange,
+}: {
+  value: SourceKey;
+  onChange: (v: SourceKey) => void;
+}) {
+  const { colors } = useTheme();
+  const { t } = useAppLanguage();
+
+  const options: { key: SourceKey; label: string }[] = [
+    { key: 'all', label: t('assistant.sourceAll') },
+    ...TAFSIR_SOURCES.map((s) => ({ key: s.id as SourceKey, label: s.shortArabicName })),
+  ];
+
+  return (
+    <View
+      accessibilityRole="tablist"
+      style={{
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        paddingHorizontal: LAYOUT.screenX,
+        paddingBottom: 12,
+      }}
+    >
+      <Txt size={11.5} weight={700} color={colors.text2} style={{ width: '100%', marginBottom: 2 }}>
+        {t('assistant.sourcesTitle')}
+      </Txt>
+      {options.map((o) => {
+        const active = o.key === value;
+        return (
+          <Press
+            key={o.key}
+            onPress={() => onChange(o.key)}
+            accessibilityLabel={o.label}
+            style={{
+              paddingVertical: 8,
+              paddingHorizontal: 14,
+              borderRadius: 11,
+              borderWidth: 1,
+              borderColor: active ? colors.emerald : colors.border,
+              backgroundColor: active ? colors.emerald : colors.surface,
+            }}
+          >
+            <Txt size={12} weight={600} color={active ? '#fff' : colors.text}>
+              {o.label}
+            </Txt>
+          </Press>
+        );
+      })}
     </View>
   );
 }
@@ -266,28 +328,57 @@ function AnswerBlock({ turn }: { turn: AssistantTurn }) {
         </>
       ) : null}
 
-      {/* tafsir excerpt(s) */}
-      {answer.tafsirReferences.length > 0 ? (
+      {/* multi-source tafsir — one source-titled card per source, in fixed
+          order (السعدي → ابن كثير → الطبري), each stacked vertically */}
+      {answer.tafsirGroups && answer.tafsirGroups.length > 0 ? (
         <View style={{ marginBottom: 18 }}>
           <Txt size={12} weight={700} color={colors.text2} style={{ marginBottom: 10 }}>
-            {t('assistant.fromSaadi')}
+            {t('assistant.tafsirSection')}
+          </Txt>
+          {answer.tafsirGroups.map((g) => (
+            <TafsirResultCard key={g.source} group={g} />
+          ))}
+        </View>
+      ) : answer.tafsirReferences.length > 0 ? (
+        /* legacy single-source excerpt answers (topic/keyword tafsir) */
+        <View style={{ marginBottom: 18 }}>
+          <Txt size={12} weight={700} color={colors.text2} style={{ marginBottom: 10 }}>
+            {answer.tafsirReferences.some((r) => r.sourceLabel)
+              ? t('assistant.tafsirSection')
+              : t('assistant.fromSaadi')}
           </Txt>
           {answer.tafsirReferences.map((ref, i) => (
-            <View
-              key={i}
-              style={{
-                padding: 14,
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.surface,
-              }}
-            >
-              <Txt size={13} lh={1.9} color={colors.text2} style={{ textAlign: 'justify' }}>
-                {formatNumber(ref.excerpt)}
-              </Txt>
-            </View>
+            <TafsirSourceCard key={`${ref.sourceId ?? 'saadi'}-${i}`} reference={ref} />
           ))}
+        </View>
+      ) : null}
+
+      {/* شرح المساعد — deterministic extract from ONLY the displayed tafsir
+          texts (this app has no generative-AI backend). Never model knowledge. */}
+      {answer.assistantExplanation ? (
+        <View style={{ marginBottom: 18 }}>
+          <Txt size={12} weight={700} color={colors.text2} style={{ marginBottom: 10 }}>
+            {t('assistant.explanationTitle')}
+          </Txt>
+          <View
+            style={{
+              padding: 14,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surface,
+            }}
+          >
+            <Txt
+              size={13}
+              lh={1.9}
+              color={colors.text2}
+              selectable
+              style={{ writingDirection: 'rtl', textAlign: 'justify' }}
+            >
+              {formatNumber(answer.assistantExplanation.text)}
+            </Txt>
+          </View>
         </View>
       ) : null}
 
@@ -311,14 +402,20 @@ export default function AssistantScreen() {
   const { t } = useAppLanguage();
   const { turns, thinking, ask } = useAssistant();
   const [input, setInput] = useState('');
+  const [sourceKey, setSourceKey] = useState<SourceKey>('all');
   const scrollRef = useRef<ScrollView>(null);
   const lastAsked = useRef<string | null>(null);
+
+  // 'all' searches every source; a specific chip narrows to that one. A source
+  // named inside the question still overrides this per-message (see search).
+  const selectedSources: TafsirSourceId[] =
+    sourceKey === 'all' ? [...ALL_TAFSIR_SOURCE_IDS] : [sourceKey];
 
   // Deep-link: a question passed from tafsir/search/verse-sheet.
   useEffect(() => {
     if (params.ask && params.ask !== lastAsked.current) {
       lastAsked.current = params.ask;
-      ask(params.ask);
+      ask(params.ask, selectedSources);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.ask]);
@@ -331,7 +428,7 @@ export default function AssistantScreen() {
   const submit = (text?: string) => {
     const q = (text ?? input).trim();
     if (!q) return;
-    ask(q);
+    ask(q, selectedSources);
     setInput('');
   };
 
@@ -362,6 +459,9 @@ export default function AssistantScreen() {
           </Txt>
         </View>
       </View>
+
+      {/* tafsir source selector — الجميع / السعدي / ابن كثير / الطبري */}
+      <SourceSelector value={sourceKey} onChange={setSourceKey} />
 
       <ScrollView
         ref={scrollRef}

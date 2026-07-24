@@ -5,6 +5,8 @@ import type { ChatAnswer } from '../types/answer.types';
 import type { HadithResult, HadithStatus } from '../types/hadith.types';
 import { buildChatAnswer } from '../utils/answerBuilder';
 import { searchAnswer } from '../utils/chatbotSearch';
+import type { TafsirConversationContext } from '../utils/tafsir/tafsirQuestionAnalyzer';
+import type { TafsirSourceId } from '../types/data.types';
 import { loadTafseerData } from '../utils/dataLoader';
 import { ASSISTANT_HADITH_COUNT, buildHadithQuery, shouldSearchHadith } from '../utils/hadithQuery';
 import { detectIntent } from '../utils/intentDetector';
@@ -72,6 +74,12 @@ export function useAssistant() {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** In-flight hadith requests, so unmount/reset can cancel them. */
   const inFlight = useRef(new Set<AbortController>());
+  /**
+   * Minimal, reference-only follow-up context (surah/ayah/sources of the last
+   * tafsir answer) — never any tafsir text. Lets «وماذا قال الطبري؟» keep the
+   * previous ayah. Cleared on reset.
+   */
+  const tafsirContext = useRef<TafsirConversationContext | null>(null);
 
   const patch = useCallback((id: string, fields: Partial<AssistantTurn>) => {
     setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, ...fields } : t)));
@@ -90,7 +98,7 @@ export function useAssistant() {
   }, [cancelHadith]);
 
   const ask = useCallback(
-    (raw: string) => {
+    (raw: string, selectedSources?: TafsirSourceId[]) => {
       const question = sanitizeInput(raw);
       if (!question || thinking) return;
 
@@ -129,7 +137,14 @@ export function useAssistant() {
       loadTafseerData()
         .catch(() => null)
         .then((groups) => {
-          const result = searchAnswer(localQuery, groups, 'ar');
+          const result = searchAnswer(localQuery, groups, 'ar', {
+            selectedSources,
+            conversationContext: tafsirContext.current,
+          });
+          // Remember only this turn's reference context (never tafsir text)
+          // so the next message can be a follow-up. A non-tafsir answer
+          // clears it so context never leaks into an unrelated question.
+          tafsirContext.current = result.resolvedContext ?? null;
           const answer = buildChatAnswer(result, 'ar');
           const remaining = Math.max(0, THINKING_MS - (Date.now() - startedAt));
           timer.current = setTimeout(() => {
@@ -177,6 +192,7 @@ export function useAssistant() {
     cancelHadith();
     setTurns([]);
     setThinking(false);
+    tafsirContext.current = null;
   }, [cancelHadith]);
 
   return { turns, thinking, ask, setFeedback, reset };

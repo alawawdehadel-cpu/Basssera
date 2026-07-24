@@ -2,6 +2,8 @@ import type {
   AnswerReference,
   ChatbotEntry,
   TafseerGroup,
+  TafsirSearchMatch,
+  TafsirSourceId,
 } from '../types/data.types';
 import type { AppLanguage, MessageStats } from '../types/chat.types';
 import { normalizeText, containsArabic } from './textNormalizer';
@@ -11,6 +13,17 @@ import { detectIntent } from './intentDetector';
 import { resolveNamedAyah } from './namedAyahs';
 import type { QuestionIntent } from '../types/intent.types';
 import qaDataRaw from '../data/chatbotData.json';
+import {
+  ALL_TAFSIR_SOURCE_IDS,
+  resolveRequestedTafsirSources,
+  sourceArabicName,
+} from './tafsirSources';
+import {
+  analyzeTafsirQuestion,
+  type TafsirConversationContext,
+  type TafsirQuestionAnalysis,
+} from './tafsir/tafsirQuestionAnalyzer';
+import { retrieveTafsirMatches } from './tafsir/tafsirSearch';
 
 /**
  * ============================================================
@@ -39,6 +52,31 @@ export interface SearchResult {
    * to 'search' (the conservative choice).
    */
   matchType?: 'direct' | 'search';
+
+  /**
+   * Per-source tafsir passages for a multi-source answer (one or more of
+   * السعدي / ابن كثير / الطبري). Present only for tafsir-passage questions
+   * resolved by the multi-source engine; `answer`/`references` above stay
+   * empty for these and the UI renders one card per entry.
+   */
+  tafsirMatches?: TafsirSearchMatch[];
+  /** True when the answer is a side-by-side comparison of sources. */
+  comparison?: boolean;
+  /**
+   * The reference/source context this turn resolved to — stored by the
+   * caller (useAssistant) so the NEXT message can be a follow-up.
+   */
+  resolvedContext?: TafsirConversationContext;
+}
+
+/** Options that let a caller steer multi-source tafsir retrieval. */
+export interface TafsirSearchOptions {
+  /** Sources the UI currently has selected. Defaults to all three. */
+  selectedSources?: TafsirSourceId[];
+  /** Force comparison mode regardless of the query wording. */
+  compare?: boolean;
+  /** Previous-turn context, enabling follow-up questions. */
+  conversationContext?: TafsirConversationContext | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -473,6 +511,176 @@ function routeByIntent(
 }
 
 /* ------------------------------------------------------------------ */
+/* 6) Multi-source tafsir retrieval (السعدي / ابن كثير / الطبري)         */
+/* ------------------------------------------------------------------ */
+
+const NO_PASSAGE_AR =
+  'لم أجد نصًا مطابقًا في التفسير المحدد داخل بيانات التطبيق.';
+
+/** Concrete "tafsir passage" intents the multi-source engine can answer. */
+const TAFSIR_PASSAGE_INTENTS = new Set<TafsirQuestionAnalysis['intent']>([
+  'exact_ayah',
+  'ayah_range',
+  'named_ayah',
+  'quran_phrase',
+  'compare_tafsir',
+  'surah_tafsir',
+  'follow_up',
+]);
+
+/** Resolve the sources to search: question-named > all > UI-selected > all three. */
+function resolveSources(
+  analysis: TafsirQuestionAnalysis,
+  options: TafsirSearchOptions | undefined,
+): TafsirSourceId[] {
+  return resolveRequestedTafsirSources({
+    explicitlyRequestedSources: analysis.requestedSources,
+    asksForAllSources: analysis.asksForAllSources,
+    uiSelectedSources: options?.selectedSources,
+  });
+}
+
+function buildContext(
+  analysis: TafsirQuestionAnalysis,
+  sources: TafsirSourceId[],
+  comparison: boolean,
+): TafsirConversationContext {
+  return {
+    lastSurahNumber: analysis.surahNumber,
+    lastSurahName: analysis.surahName,
+    lastAyahStart: analysis.ayahStart,
+    lastAyahEnd: analysis.ayahEnd,
+    lastSources: sources,
+    lastWasComparison: comparison,
+  };
+}
+
+/**
+ * Handles a tafsir-passage question across the selected source(s). Returns
+ * null when the question is NOT a concrete tafsir-passage request (so the
+ * existing pipeline handles it unchanged). The gate is deliberately narrow:
+ * structured intents (stats, metadata, word meaning, topic, hadith, fatwa)
+ * are excluded so nothing that already works is hijacked.
+ */
+function handleMultiSourceTafsir(
+  rawQuery: string,
+  detectedIntent: QuestionIntent,
+  lang: AppLanguage,
+  options: TafsirSearchOptions | undefined,
+): SearchResult | null {
+  // Only tafsir-shaped questions (or ones that explicitly name a source /
+  // ask to compare) may enter this branch.
+  const tafsirShaped =
+    detectedIntent === 'TAFSIR_EXPLANATION' || detectedIntent === 'GENERAL_TAFSIR_SEARCH';
+
+  const analysis = analyzeTafsirQuestion(rawQuery, options?.conversationContext ?? null);
+
+  const explicit =
+    analysis.requestedSources.length > 0 ||
+    analysis.compareSources ||
+    !!analysis.namedAyah ||
+    !!analysis.quotedPhrase;
+
+  if (!tafsirShaped && !explicit) return null;
+  if (!TAFSIR_PASSAGE_INTENTS.has(analysis.intent)) return null;
+
+  // Clarifications the analyzer already decided on (missing surah, ambiguous
+  // phrase / named ayah). Only the missing-surah case is gated on an explicit
+  // tafsir trigger, so a stray number elsewhere never forces a prompt.
+  if (analysis.needsClarification) {
+    if (analysis.clarificationReason === 'missing_surah' && detectedIntent !== 'TAFSIR_EXPLANATION') {
+      return null;
+    }
+    return { kind: 'clarify', answer: clarifyText(analysis, lang) };
+  }
+
+  // A whole-surah tafsir with no explicit tafsir trigger / source / compare
+  // is left to the existing pipeline (preserves «افتح سورة …» behavior).
+  if (
+    analysis.intent === 'surah_tafsir' &&
+    detectedIntent !== 'TAFSIR_EXPLANATION' &&
+    !explicit
+  ) {
+    return null;
+  }
+
+  if (analysis.surahNumber === null) return null;
+
+  const comparison = analysis.compareSources || options?.compare === true;
+  let sources = resolveSources(analysis, options);
+  if (comparison && sources.length < 2) sources = [...ALL_TAFSIR_SOURCE_IDS];
+
+  const { matches, failedSources, allMissing } = retrieveTafsirMatches(sources, analysis);
+
+  const range =
+    analysis.ayahStart === null
+      ? ''
+      : analysis.ayahStart === analysis.ayahEnd
+        ? `${analysis.ayahStart}`
+        : `${analysis.ayahStart}–${analysis.ayahEnd}`;
+  const surahLabel = analysis.surahName ?? `سورة ${analysis.surahNumber}`;
+
+  const title = comparison
+    ? `مقارنة التفاسير — سورة ${surahLabel}${range ? ` الآية ${range}` : ''}`
+    : `تفسير سورة ${surahLabel}${range ? ` — الآية ${range}` : ''}`;
+
+  // Honest failure/absence messaging — never substitutes another source.
+  let summary: string;
+  if (allMissing) {
+    summary = NO_PASSAGE_AR;
+  } else if (comparison) {
+    summary = `النصوص المتطابقة من ${sources.length} من التفاسير، منسوبة لكل مفسّر دون إصدار حكم بالاتفاق أو الاختلاف.`;
+  } else {
+    summary = `التفسير من ${sources.length === 1 ? 'المصدر المحدد' : 'المصادر المحددة'} كما ورد نصًّا في بيانات التطبيق.`;
+  }
+  if (failedSources.length > 0) {
+    const names = failedSources.map(sourceArabicName).join('، ');
+    summary += ` (تعذّر تحميل: ${names}. بقية التفاسير متاحة.)`;
+  }
+
+  const matchType: 'direct' | 'search' =
+    analysis.intent === 'quran_phrase' ? 'search' : 'direct';
+
+  const note =
+    (analysis.asksForSummary || analysis.asksForSimplification) && !allMissing
+      ? 'مقتطف مختصر مقتطع حرفيًا من نص التفسير — يمكن عرض النص كاملًا.'
+      : undefined;
+
+  return {
+    kind: 'answer',
+    source: 'tafseer',
+    title,
+    answer: summary,
+    note,
+    tafsirMatches: matches,
+    comparison,
+    matchType,
+    resolvedContext: buildContext(analysis, sources, comparison),
+  };
+}
+
+function clarifyText(analysis: TafsirQuestionAnalysis, lang: AppLanguage): string {
+  if (analysis.clarificationReason === 'missing_surah') {
+    return lang === 'ar'
+      ? 'اذكر اسم السورة مع رقم الآية (مثال: «تفسير الآية ٥ من سورة الفاتحة»).'
+      : 'Please name the surah along with the ayah number (e.g. "tafsir of ayah 5 of Surah Al-Fatihah").';
+  }
+  if (analysis.clarificationReason === 'ambiguous_named_ayah') {
+    return lang === 'ar'
+      ? 'هذا الاسم قد يشير إلى أكثر من آية؛ اذكر اسم السورة أو رقم الآية.'
+      : 'This name may refer to more than one ayah; please give the surah or ayah number.';
+  }
+  // ambiguous_phrase
+  const list = (analysis.phraseCandidates ?? [])
+    .slice(0, 6)
+    .map((c) => `${c.surah}:${c.ayah}`)
+    .join('، ');
+  return lang === 'ar'
+    ? `وجدت أكثر من آية مطابقة للعبارة؛ اذكر اسم السورة أو رقم الآية.${list ? ` (مواضع محتملة: ${list})` : ''}`
+    : `I found more than one matching ayah; please name the surah or ayah number.${list ? ` (possible: ${list})` : ''}`;
+}
+
+/* ------------------------------------------------------------------ */
 /* Public API                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -486,6 +694,7 @@ export function searchAnswer(
   rawQuery: string,
   groups: TafseerGroup[] | null,
   lang: AppLanguage,
+  options?: TafsirSearchOptions,
 ): SearchResult {
   const replyLang: AppLanguage = containsArabic(rawQuery) ? 'ar' : lang;
 
@@ -529,6 +738,16 @@ export function searchAnswer(
       references: exactQa.entry.references ?? [],
     };
   }
+
+  // 1b) multi-source tafsir passage (السعدي / ابن كثير / الطبري). Runs before
+  // the single-source routing/extended-intents below so a tafsir-of-an-ayah
+  // question is answered with source-labeled cards from the SELECTED sources
+  // rather than the old As-Sa'di-only path. Its gate is narrow: it returns
+  // null for anything that isn't a concrete tafsir-passage request, so every
+  // structured intent (stats/metadata/word-meaning/topic/hadith) still falls
+  // through to the exact same handlers as before.
+  const multi = handleMultiSourceTafsir(rawQuery, detected.intent, replyLang, options);
+  if (multi) return multi;
 
   // 2) intent-directed lookup: try the ONE local system the detected
   // intent maps to (quranAnalytics for QURAN_STATS/WORD_LOCATION,
