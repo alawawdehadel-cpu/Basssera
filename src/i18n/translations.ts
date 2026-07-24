@@ -311,6 +311,13 @@ export const AR = {
   'assistant.followUp.2': 'اذكر آية أخرى في الموضوع',
   'assistant.arabicOnlyNote':
     'يعتمد المساعد على تفسير السعدي وهو متوفر بالعربية فقط، لذا تُعرض الإجابات بالعربية.',
+  'assistant.suggest.5': 'حديث عن بر الوالدين',
+  'assistant.hadith.title': 'أحاديث ذات صلة',
+  'assistant.hadith.authenticOnly':
+    'يعرض المساعد ما حكم عليه المحدثون بالصحة أو الحُسن فقط. افتح الموسوعة الحديثية لعرض بقية الدرجات.',
+  'assistant.hadith.seeAll': 'عرض كل الدرجات في الموسوعة الحديثية',
+  'assistant.hadith.arabicOnly':
+    'البحث في الموسوعة الحديثية متاح بالعربية فقط، لأن نصوص الأحاديث وأحكام المحدثين عربية كما وردت في المصدر.',
 
   /* library */
   'library.title': 'مكتبتي',
@@ -419,7 +426,7 @@ export const AR = {
     'يُعرض النص القرآني من نسخة عثمانية موثّقة، والتفسير من «تيسير الكريم الرحمن» للشيخ عبد الرحمن السعدي. لا يولّد التطبيق نصًا دينيًا ولا يستخدم أي خدمة ذكاء اصطناعي خارجية.',
   'about.s3.title': 'خصوصيتك',
   'about.s3.body':
-    'كل بياناتك (العلامات، الملاحظات، الإعدادات، سجل القراءة) تُحفظ على جهازك فقط، ولا يوجد حساب أو تتبّع. يتصل التطبيق بخدمتين خارجيتين عند الحاجة فقط: AlAdhan لحساب مواقيت الصلاة (تُرسل المدينة أو إحداثيات مقرَّبة)، والدرر السنية للبحث في الموسوعة الحديثية (يُرسل نص البحث). ما عدا ذلك، القرآن والتفسير يعملان دون إنترنت بالكامل.',
+    'كل بياناتك (العلامات، الملاحظات، الإعدادات، سجل القراءة) تُحفظ على جهازك فقط، ولا يوجد حساب أو تتبّع. يتصل التطبيق بخدمتين خارجيتين عند الحاجة فقط: AlAdhan لحساب مواقيت الصلاة (تُرسل المدينة أو إحداثيات مقرَّبة)، والدرر السنية للموسوعة الحديثية — سواء بحثتَ فيها بنفسك أو سألتَ المساعد، إذ تُرسل الكلمات المفتاحية من سؤالك لجلب الأحاديث ذات الصلة. ما عدا ذلك، القرآن والتفسير وشرح المساعد تعمل دون إنترنت بالكامل.',
 
   /* misc states */
   'surah.mulk': 'الملك',
@@ -767,6 +774,16 @@ export const EN: Record<TranslationKey, string> = {
   'assistant.followUp.2': 'Mention another verse on this topic',
   'assistant.arabicOnlyNote':
     "The assistant draws on Tafsir As-Sa'di, which is available in Arabic only, so answers are shown in Arabic.",
+  // Deliberately Arabic in the English table too: a suggestion chip is sent
+  // verbatim as the question, and الدرر السنية indexes Arabic only — an
+  // English chip would demo the feature by failing to find anything.
+  'assistant.suggest.5': 'حديث عن بر الوالدين',
+  'assistant.hadith.title': 'Related hadith',
+  'assistant.hadith.authenticOnly':
+    'The assistant shows only narrations the scholars graded authentic or good. Open the hadith encyclopedia to see the other grades.',
+  'assistant.hadith.seeAll': 'See all grades in the hadith encyclopedia',
+  'assistant.hadith.arabicOnly':
+    'The hadith encyclopedia can only be searched in Arabic, because the narrations and the scholars’ rulings are Arabic as published by the source.',
 
   'library.title': 'My library',
   'library.tab.bookmarks': 'Bookmarks',
@@ -872,7 +889,7 @@ export const EN: Record<TranslationKey, string> = {
     "The Quran text is shown from an authenticated Uthmani edition, and the tafsir is from Taysir al-Karim ar-Rahman by Shaykh Abd ar-Rahman as-Sa'di. The app never generates religious text and uses no external AI service.",
   'about.s3.title': 'Your privacy',
   'about.s3.body':
-    'All your data (bookmarks, notes, settings, reading history) is stored on your device only — there is no account and no tracking. The app contacts two external services, and only when needed: AlAdhan to calculate prayer times (your city or rounded coordinates are sent), and Dorar to search the hadith encyclopedia (your search text is sent). Everything else — Quran and tafsir — works fully offline.',
+    'All your data (bookmarks, notes, settings, reading history) is stored on your device only — there is no account and no tracking. The app contacts two external services, and only when needed: AlAdhan to calculate prayer times (your city or rounded coordinates are sent), and Dorar for the hadith encyclopedia — whether you search it yourself or ask the assistant, which sends the keywords from your question to fetch related narrations. Everything else — Quran, tafsir, and the assistant’s own explanation — works fully offline.',
 
   'surah.mulk': 'Al-Mulk',
 

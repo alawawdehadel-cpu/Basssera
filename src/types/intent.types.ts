@@ -25,6 +25,8 @@ export type QuestionIntent =
   | 'AYAH_SEARCH'
   /** «هل يجوز ...», «ما حكم ...» — never answered directly, only referred. */
   | 'FATWA_SAFETY'
+  /** «حديث عن الصبر», «هل ورد حديث في ...», «قال رسول الله ...» — answered from الدرر السنية. */
+  | 'HADITH_LOOKUP'
   /** A real, intelligible question that doesn't match any specific pattern above. */
   | 'GENERAL_TAFSIR_SEARCH'
   /** Empty, unintelligible, or otherwise unclassifiable input. */

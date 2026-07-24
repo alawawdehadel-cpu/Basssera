@@ -44,6 +44,16 @@ const TOPIC_AYAHS_RE = /ايات\s*عن|هات\s*ايات|قصه|ماذا\s*يق
 /** «في أي سورة وردت عبارة …», «أين توجد آية …», «ابحث عن …» */
 const AYAH_SEARCH_RE = /في\s*اي\s*سوره\s*وردت|اين\s*توجد\s*ايه|(^|\s)ابحث\s*عن(\s|$)/;
 
+/**
+ * «حديث عن الصبر», «ما هو الحديث الذي …», «قال رسول الله …»
+ *
+ * The only intent whose answer does NOT come from the bundled datasets —
+ * it is served from الدرر السنية over the network (see hadithService.ts).
+ * Detection stays purely lexical here, as with every other intent.
+ */
+const HADITH_LOOKUP_RE =
+  /(^|\s)(حديث|حديثا|احاديث|الحديث|الاحاديث)(\s|$)|قال\s*رسول\s*الله|قال\s*النبي|عن\s*النبي|عن\s*رسول\s*الله|السنه\s*النبويه|(^|\s)(hadith|hadiths|ahadith|sunnah)(\s|$)/;
+
 function isFatwaRequest(q: string): boolean {
   return FATWA_TRIGGERS.some((t) => ` ${q} `.includes(` ${t} `));
 }
@@ -52,6 +62,12 @@ function classify(normalizedQuery: string): QuestionIntent {
   // Safety first: a ruling-style question must never be answered as a
   // regular tafsir/meaning/topic lookup, whatever else it also matches.
   if (isFatwaRequest(normalizedQuery)) return 'FATWA_SAFETY';
+
+  // Checked ahead of every Quran matcher: naming a حديث is an unambiguous
+  // signal, and none of the local systems below index hadith at all — so
+  // "ما تفسير حديث ..." is better served by the narration itself than by a
+  // tafsir lookup that can only miss.
+  if (HADITH_LOOKUP_RE.test(normalizedQuery)) return 'HADITH_LOOKUP';
 
   // Checked ahead of the generic «كم» stats trigger: "كم عدد آيات سورة
   // البقرة؟" is about ONE surah's metadata, not a whole-Quran count.

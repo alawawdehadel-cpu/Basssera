@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import EvidenceCard from '../../src/components/basirah/EvidenceCard';
+import AssistantHadithSection from '../../src/components/basirah/hadith/AssistantHadithSection';
 import Icon from '../../src/components/basirah/Icon';
 import { Press } from '../../src/components/basirah/primitives';
 import { useToast } from '../../src/components/basirah/Toast';
@@ -21,6 +22,7 @@ const SUGGESTED_KEYS = [
   'assistant.suggest.2',
   'assistant.suggest.3',
   'assistant.suggest.4',
+  'assistant.suggest.5',
 ] as const;
 
 const FOLLOWUP_KEYS = ['assistant.followUp.1', 'assistant.followUp.2'] as const;
@@ -288,6 +290,15 @@ function AnswerBlock({ turn }: { turn: AssistantTurn }) {
           ))}
         </View>
       ) : null}
+
+      {/* أحاديث ذات صلة — الدرر السنية */}
+      <AssistantHadithSection
+        status={turn.hadithStatus}
+        results={turn.hadith}
+        query={turn.hadithQuery}
+        messageKey={turn.hadithMessageKey}
+        led={turn.hadithLed}
+      />
 
       {feedbackRow}
     </View>
