@@ -61,6 +61,7 @@ function ThemedApp() {
         <Stack.Screen name="player" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="settings" />
         <Stack.Screen name="prayer-times" />
+        <Stack.Screen name="hadith" />
         <Stack.Screen name="about" />
       </Stack>
     </>

@@ -419,10 +419,47 @@ export const AR = {
     'يُعرض النص القرآني من نسخة عثمانية موثّقة، والتفسير من «تيسير الكريم الرحمن» للشيخ عبد الرحمن السعدي. لا يولّد التطبيق نصًا دينيًا ولا يستخدم أي خدمة ذكاء اصطناعي خارجية.',
   'about.s3.title': 'خصوصيتك',
   'about.s3.body':
-    'كل البيانات (العلامات، الملاحظات، الإعدادات، سجل القراءة) تُحفظ على جهازك فقط. لا يجمع التطبيق بياناتك ولا يرسلها إلى أي خادم.',
+    'كل بياناتك (العلامات، الملاحظات، الإعدادات، سجل القراءة) تُحفظ على جهازك فقط، ولا يوجد حساب أو تتبّع. يتصل التطبيق بخدمتين خارجيتين عند الحاجة فقط: AlAdhan لحساب مواقيت الصلاة (تُرسل المدينة أو إحداثيات مقرَّبة)، والدرر السنية للبحث في الموسوعة الحديثية (يُرسل نص البحث). ما عدا ذلك، القرآن والتفسير يعملان دون إنترنت بالكامل.',
 
   /* misc states */
   'surah.mulk': 'الملك',
+
+  /* hadith (الموسوعة الحديثية — الدرر السنية) */
+  'hadith.title': 'الحديث الشريف',
+  'hadith.tabLabel': 'الحديث',
+  'hadith.searchPlaceholder': 'ابحث في الموسوعة الحديثية...',
+  'hadith.searchLabel': 'بحث في الأحاديث',
+  'hadith.grade.authentic': 'صحيح',
+  'hadith.grade.chain': 'حكم على الإسناد',
+  'hadith.grade.weak': 'ضعيف',
+  'hadith.grade.unknown': 'انظر حكم المحدث',
+  'hadith.filter.all': 'الكل',
+  'hadith.filter.authentic': 'صحيح وحسن',
+  'hadith.filter.chain': 'حكم الإسناد',
+  'hadith.filter.weak': 'ضعيف',
+  'hadith.narrator': 'الراوي',
+  'hadith.muhaddith': 'المحدث',
+  'hadith.source': 'المصدر',
+  'hadith.pageOrNumber': 'الصفحة أو الرقم',
+  'hadith.ruling': 'خلاصة حكم المحدث',
+  'hadith.results': '{count} حديثًا',
+  'hadith.searching': 'جارٍ البحث في الموسوعة الحديثية...',
+  'hadith.start': 'ابحث في الموسوعة الحديثية',
+  'hadith.startBody': 'اكتب كلمة أو جزءًا من متن الحديث لعرض الأحاديث وأحكام المحدثين عليها.',
+  'hadith.empty': 'لم نجد أحاديث مطابقة',
+  'hadith.emptyBody': 'جرّب كلمة أقصر أو صياغة أخرى من متن الحديث.',
+  'hadith.error': 'تعذر جلب الأحاديث حاليًا.',
+  'hadith.offline': 'أنت غير متصل — يتم عرض آخر نتائج محفوظة.',
+  'hadith.loadMore': 'عرض المزيد',
+  'hadith.gradeNotice':
+    'تشمل النتائج أحاديث ضعيفة وموضوعة كما وردت في الموسوعة — راجع حكم المحدث أسفل كل حديث.',
+  'hadith.attribution': 'المصدر: الدرر السنية — الموسوعة الحديثية',
+  'hadith.openDorar': 'فتح موقع الدرر السنية',
+  'hadith.arabicOnlyNote': 'تُعرض الأحاديث وأحكام المحدثين بالعربية كما وردت في المصدر.',
+  'hadith.timeout': 'انتهت مهلة الطلب',
+  'hadith.connectionFailed': 'تعذر الاتصال بخادم الدرر السنية',
+  'hadith.invalidResponse': 'استجابة غير صالحة من الخادم',
+
   'states.close': 'إغلاق',
 } as const;
 
@@ -835,9 +872,48 @@ export const EN: Record<TranslationKey, string> = {
     "The Quran text is shown from an authenticated Uthmani edition, and the tafsir is from Taysir al-Karim ar-Rahman by Shaykh Abd ar-Rahman as-Sa'di. The app never generates religious text and uses no external AI service.",
   'about.s3.title': 'Your privacy',
   'about.s3.body':
-    'All your data (bookmarks, notes, settings, reading history) is stored on your device only. The app does not collect or send your data to any server.',
+    'All your data (bookmarks, notes, settings, reading history) is stored on your device only — there is no account and no tracking. The app contacts two external services, and only when needed: AlAdhan to calculate prayer times (your city or rounded coordinates are sent), and Dorar to search the hadith encyclopedia (your search text is sent). Everything else — Quran and tafsir — works fully offline.',
 
   'surah.mulk': 'Al-Mulk',
+
+  /* hadith */
+  'hadith.title': 'Hadith',
+  'hadith.tabLabel': 'Hadith',
+  'hadith.searchPlaceholder': 'Search the hadith encyclopedia...',
+  'hadith.searchLabel': 'Search hadith',
+  'hadith.grade.authentic': 'Authentic',
+  'hadith.grade.chain': 'Chain ruling',
+  'hadith.grade.weak': 'Weak',
+  'hadith.grade.unknown': 'See ruling',
+  'hadith.filter.all': 'All',
+  'hadith.filter.authentic': 'Authentic & good',
+  'hadith.filter.chain': 'Chain rulings',
+  'hadith.filter.weak': 'Weak',
+  'hadith.narrator': 'Narrator',
+  'hadith.muhaddith': 'Graded by',
+  'hadith.source': 'Source',
+  'hadith.pageOrNumber': 'Page / no.',
+  'hadith.ruling': "Muhaddith's ruling",
+  'hadith.results': '{count} hadith',
+  'hadith.searching': 'Searching the hadith encyclopedia...',
+  'hadith.start': 'Search the hadith encyclopedia',
+  'hadith.startBody':
+    'Type a word or part of a hadith to see matching hadith and the scholars’ rulings on them.',
+  'hadith.empty': 'No matching hadith found',
+  'hadith.emptyBody': 'Try a shorter word, or different wording from the hadith text.',
+  'hadith.error': 'Could not fetch hadith right now.',
+  'hadith.offline': 'You are offline — showing the last saved results.',
+  'hadith.loadMore': 'Show more',
+  'hadith.gradeNotice':
+    'Results include weak and fabricated hadith as recorded in the encyclopedia — check the ruling under each one.',
+  'hadith.attribution': 'Source: Dorar — Encyclopedia of Hadith',
+  'hadith.openDorar': 'Open dorar.net',
+  'hadith.arabicOnlyNote':
+    'Hadith texts and scholars’ rulings are shown in Arabic, as recorded in the source.',
+  'hadith.timeout': 'The request timed out',
+  'hadith.connectionFailed': 'Could not reach the Dorar server',
+  'hadith.invalidResponse': 'Invalid response from the server',
+
   'states.close': 'Close',
 };
 

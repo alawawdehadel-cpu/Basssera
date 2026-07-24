@@ -24,8 +24,9 @@ import { useToast } from '../src/components/basirah/Toast';
 import Txt from '../src/components/basirah/Txt';
 import VerseActionSheet from '../src/components/basirah/VerseActionSheet';
 import MushafPage from '../src/components/basirah/mushaf/MushafPage';
+import { useAppLanguage } from '../src/hooks/useAppLanguage';
 import { usePlayback, RECITERS } from '../src/hooks/usePlayback';
-import { FONT_STEP_LABELS, useSettings } from '../src/hooks/useSettings';
+import { FONT_STEP_KEYS, useSettings } from '../src/hooks/useSettings';
 import { useUserData } from '../src/hooks/useUserData';
 import { FONT } from '../src/theme/fonts';
 import { useTheme } from '../src/theme/ThemeContext';
@@ -33,7 +34,7 @@ import type { MushafLine, QuranAyah, SurahListItem } from '../src/types/quran.ty
 import { TOTAL_MUSHAF_PAGES } from '../src/types/quran.types';
 import { getJuzStartPages } from '../src/utils/juzPages';
 import { getJuzOnMushafPage, getMushafPage } from '../src/utils/mushafLayout';
-import { stripSurahPrefix, toArabicDigits } from '../src/utils/numerals';
+import { formatNumber, stripSurahPrefix } from '../src/utils/numerals';
 import { getAyah, getSurahList, loadQuranData } from '../src/utils/quranDataLoader';
 import { loadLastMushafPage, loadReadingMode, saveLastMushafPage, saveLastPosition, saveReadingMode } from '../src/utils/storage';
 import { getSurahOpeningMeta, shouldRenderBismillah, stripLeadingBismillah } from '../src/utils/surahOpening';
@@ -52,6 +53,7 @@ function surahStartOf(line: MushafLine): number | null {
 /** Decorative surah opening: name, gold rule, meta line. */
 function SurahHeader({ surahNumber }: { surahNumber: number }) {
   const { colors } = useTheme();
+  const { t } = useAppLanguage();
   const meta = getSurahOpeningMeta(surahNumber);
   return (
     <View style={{ alignItems: 'center', marginBottom: 14, marginTop: 6 }}>
@@ -62,8 +64,8 @@ function SurahHeader({ surahNumber }: { surahNumber: number }) {
       </Txt>
       <View style={{ width: 60, height: 2, borderRadius: 1, backgroundColor: colors.gold, marginVertical: 8 }} />
       <Txt size={10} color={colors.text3} align="center">
-        {meta.revelationType === 'medinan' ? 'مدنية' : 'مكية'}
-        {meta.ayahCount ? ` • ${toArabicDigits(meta.ayahCount)} آية` : ''}
+        {meta.revelationType === 'medinan' ? t('common.medinan') : t('common.meccan')}
+        {meta.ayahCount ? ` • ${formatNumber(meta.ayahCount)} ${t('common.ayahCount')}` : ''}
       </Txt>
     </View>
   );
@@ -72,6 +74,7 @@ function SurahHeader({ surahNumber }: { surahNumber: number }) {
 export default function ReaderScreen() {
   const params = useLocalSearchParams<{ page?: string }>();
   const { colors } = useTheme();
+  const { t } = useAppLanguage();
   const { showToast } = useToast();
   const { startTrack } = usePlayback();
   const { quranFontSize, fontStep, setFontStep, keepAwake, toggleFlag } = useSettings();
@@ -193,7 +196,7 @@ export default function ReaderScreen() {
             ۞
           </Txt>
           <Txt size={13} lh={1.8} color={colors.text2} align="center">
-            بيانات تخطيط هذه الصفحة غير متوفرة بعد. يعرض المصحف صفحاتٍ بتخطيطٍ حقيقي من مصدر موثّق فقط.
+            {t('reader.layoutMissing')}
           </Txt>
         </View>
       );
@@ -230,7 +233,7 @@ export default function ReaderScreen() {
                         {w.textUthmani}
                         {w.isAyahEnd ? (
                           <Text style={{ color: colors.gold }}>
-                            {' '}۝{toArabicDigits(w.ayahNumber)}{' '}
+                            {' '}۝{formatNumber(w.ayahNumber)}{' '}
                           </Text>
                         ) : (
                           ' '
@@ -271,7 +274,7 @@ export default function ReaderScreen() {
     if (pageAyahs.length === 0) {
       return (
         <Txt size={13} lh={1.8} color={colors.text2} align="center" style={{ paddingVertical: 40 }}>
-          لا تتوفر بيانات هذه الصفحة.
+          {t('reader.noPageData')}
         </Txt>
       );
     }
@@ -329,7 +332,7 @@ export default function ReaderScreen() {
                     style={isSelected ? { backgroundColor: colors.goldTintStrong, borderRadius: 6 } : undefined}
                   >
                     {display}
-                    <Text style={{ color: colors.gold }}> ۝{toArabicDigits(a.ayahNumber)} </Text>
+                    <Text style={{ color: colors.gold }}> ۝{formatNumber(a.ayahNumber)} </Text>
                   </Text>
                 );
               })}
@@ -361,7 +364,7 @@ export default function ReaderScreen() {
             >
               <Press
                 onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/quran'))}
-                accessibilityLabel="رجوع"
+                accessibilityLabel={t('common.back')}
                 style={{
                   width: 38,
                   height: 38,
@@ -396,7 +399,7 @@ export default function ReaderScreen() {
                   style={{ backgroundColor: colors.surface2, borderRadius: 10, paddingVertical: 7, paddingHorizontal: 11 }}
                 >
                   <Txt size={11.5} weight={600} color={colors.text2}>
-                    الجزء {toArabicDigits(juz ?? 0)}
+                    {t('common.juz')} {formatNumber(juz ?? 0)}
                   </Txt>
                 </Press>
                 <Press
@@ -404,13 +407,13 @@ export default function ReaderScreen() {
                   style={{ backgroundColor: colors.surface2, borderRadius: 10, paddingVertical: 7, paddingHorizontal: 11 }}
                 >
                   <Txt size={11.5} weight={600} color={colors.text2}>
-                    ص {toArabicDigits(page)}
+                    {t('common.page')} {formatNumber(page)}
                   </Txt>
                 </Press>
               </View>
               <Press
                 onPress={() => setSheet('readSettings')}
-                accessibilityLabel="خيارات"
+                accessibilityLabel={t('reader.options')}
                 style={{
                   width: 38,
                   height: 38,
@@ -424,7 +427,7 @@ export default function ReaderScreen() {
               </Press>
             </View>
             <View style={{ paddingHorizontal: 18, paddingBottom: 10 }}>
-              <SegmentedTabs items={['المصحف', 'وضع القراءة']} active={mode === 'mushaf' ? 0 : 1} onChange={setModePersist} height={34} />
+              <SegmentedTabs items={[t('reader.mushafMode'), t('reader.readingMode')]} active={mode === 'mushaf' ? 0 : 1} onChange={setModePersist} height={34} />
             </View>
           </View>
         ) : null}
@@ -480,7 +483,7 @@ export default function ReaderScreen() {
                       }}
                     >
                       <Txt size={9.5} color={colors.text3} align="center">
-                        النص القرآني معروض من مصدر معتمد (نسخة عثمانية موثّقة)
+                        {t('reader.sourceNote')}
                       </Txt>
                     </View>
                   </View>
@@ -495,7 +498,7 @@ export default function ReaderScreen() {
           <View pointerEvents="none" style={{ position: 'absolute', bottom: 24, left: 0, right: 0, alignItems: 'center' }}>
             <View style={{ backgroundColor: 'rgba(0,0,0,.5)', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 20 }}>
               <Txt size={11} color="#fff" align="center">
-                اضغط لإظهار الأدوات
+                {t('reader.tapToShow')}
               </Txt>
             </View>
           </View>
@@ -506,7 +509,7 @@ export default function ReaderScreen() {
           <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border }}>
             <View style={{ alignItems: 'center', paddingVertical: 6 }}>
               <Txt size={11} color={colors.text3} align="center">
-                الصفحة {toArabicDigits(page)}
+                {t('common.page')} {formatNumber(page)}
               </Txt>
             </View>
             <View
@@ -521,7 +524,7 @@ export default function ReaderScreen() {
             >
               <Press
                 onPress={() => turnPage(page + 1)}
-                accessibilityLabel="الصفحة التالية"
+                accessibilityLabel={t('reader.nextPage')}
                 style={{
                   width: 40,
                   height: 40,
@@ -537,7 +540,7 @@ export default function ReaderScreen() {
               </Press>
               <Press
                 onPress={() => setSheet('readSettings')}
-                accessibilityLabel="حجم الخط"
+                accessibilityLabel={t('reader.fontSizeLabel')}
                 style={{
                   width: 40,
                   height: 40,
@@ -562,9 +565,9 @@ export default function ReaderScreen() {
                     ayahCount: meta.ayahCount ?? 10,
                     reciter: RECITERS[1],
                   });
-                  showToast('جارٍ التشغيل');
+                  showToast(t('playback.starting'));
                 }}
-                accessibilityLabel="تشغيل التلاوة"
+                accessibilityLabel={t('reader.play')}
                 style={{
                   width: 54,
                   height: 54,
@@ -583,7 +586,7 @@ export default function ReaderScreen() {
               </Press>
               <Press
                 onPress={() => setSheet('readSettings')}
-                accessibilityLabel="إعدادات القراءة"
+                accessibilityLabel={t('reader.readingSettings')}
                 style={{
                   width: 40,
                   height: 40,
@@ -599,7 +602,7 @@ export default function ReaderScreen() {
               </Press>
               <Press
                 onPress={() => turnPage(page - 1)}
-                accessibilityLabel="الصفحة السابقة"
+                accessibilityLabel={t('reader.prevPage')}
                 style={{
                   width: 40,
                   height: 40,
@@ -624,7 +627,7 @@ export default function ReaderScreen() {
       {/* surah picker */}
       <BottomSheet visible={sheet === 'surah'} onClose={() => setSheet(null)} scrollable={false}>
         <Txt size={16} weight={700} color={colors.text} style={{ marginBottom: 14 }}>
-          اختر السورة
+          {t('reader.chooseSurah')}
         </Txt>
         <FlatList
           data={surahList}
@@ -657,14 +660,14 @@ export default function ReaderScreen() {
                 }}
               >
                 <Txt size={12} weight={700} color={colors.emerald} align="center">
-                  {toArabicDigits(s.number)}
+                  {formatNumber(s.number)}
                 </Txt>
               </View>
               <Txt size={17} weight={700} amiri color={colors.text} style={{ flex: 1 }}>
                 {stripSurahPrefix(s.nameArabic)}
               </Txt>
               <Txt size={11} color={colors.text2}>
-                {toArabicDigits(s.ayahCount)} آية • ص {toArabicDigits(s.firstPage)}
+                {formatNumber(s.ayahCount)} {t('common.ayahCount')} • {t('common.page')} {formatNumber(s.firstPage)}
               </Txt>
             </Press>
           )}
@@ -674,7 +677,7 @@ export default function ReaderScreen() {
       {/* juz picker */}
       <BottomSheet visible={sheet === 'juz'} onClose={() => setSheet(null)}>
         <Txt size={16} weight={700} color={colors.text} style={{ marginBottom: 14 }}>
-          اختر الجزء
+          {t('reader.chooseJuz')}
         </Txt>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
           {Array.from({ length: 30 }, (_, i) => i + 1).map((j) => (
@@ -697,10 +700,10 @@ export default function ReaderScreen() {
               }}
             >
               <Txt size={16} weight={700} color={colors.emerald} align="center">
-                {toArabicDigits(j)}
+                {formatNumber(j)}
               </Txt>
               <Txt size={10} color={colors.text2} align="center">
-                الجزء
+                {t('common.juz')}
               </Txt>
             </Press>
           ))}
@@ -710,10 +713,10 @@ export default function ReaderScreen() {
       {/* page jump */}
       <BottomSheet visible={sheet === 'page'} onClose={() => setSheet(null)}>
         <Txt size={16} weight={700} color={colors.text} style={{ marginBottom: 6 }}>
-          الانتقال إلى صفحة
+          {t('reader.goToPage')}
         </Txt>
         <Txt size={12} color={colors.text2} style={{ marginBottom: 16 }}>
-          أدخل رقم الصفحة ({toArabicDigits(1)} - {toArabicDigits(TOTAL_MUSHAF_PAGES)})
+          {t('quran.pageRange', { from: formatNumber(1), to: formatNumber(TOTAL_MUSHAF_PAGES) })}
         </Txt>
         <View
           style={{
@@ -733,7 +736,7 @@ export default function ReaderScreen() {
             value={pageInput}
             onChangeText={(t) => setPageInput(t.replace(/[^0-9٠-٩]/g, ''))}
             keyboardType="number-pad"
-            placeholder={toArabicDigits(page)}
+            placeholder={formatNumber(page)}
             placeholderTextColor={colors.text3}
             style={{
               flex: 1,
@@ -745,11 +748,11 @@ export default function ReaderScreen() {
             }}
           />
           <Txt size={12} color={colors.text2}>
-            / {toArabicDigits(TOTAL_MUSHAF_PAGES)}
+            / {formatNumber(TOTAL_MUSHAF_PAGES)}
           </Txt>
         </View>
         <PrimaryButton
-          title="انتقال"
+          title={t('quran.go')}
           height={50}
           onPress={() => {
             const western = pageInput.replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
@@ -766,15 +769,15 @@ export default function ReaderScreen() {
       {/* reading settings */}
       <BottomSheet visible={sheet === 'readSettings'} onClose={() => setSheet(null)}>
         <Txt size={16} weight={700} color={colors.text} style={{ marginBottom: 16 }}>
-          إعدادات القراءة
+          {t('reader.readingSettings')}
         </Txt>
         <View style={{ marginBottom: 18 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
             <Txt size={13} weight={600} color={colors.text}>
-              حجم خط القرآن
+              {t('reader.quranFontSize')}
             </Txt>
             <Txt size={12} weight={700} color={colors.emerald}>
-              {FONT_STEP_LABELS[fontStep]}
+              {t(FONT_STEP_KEYS[fontStep])}
             </Txt>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -782,7 +785,7 @@ export default function ReaderScreen() {
               أ
             </Txt>
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 0 }}>
-              {FONT_STEP_LABELS.map((_, i) => (
+              {FONT_STEP_KEYS.map((_key: string, i: number) => (
                 <Press
                   key={i}
                   onPress={() => setFontStep(i)}
@@ -815,7 +818,7 @@ export default function ReaderScreen() {
           }}
         >
           <Txt size={13} color={colors.text}>
-            إبقاء الشاشة مضاءة
+            {t('reader.keepAwake')}
           </Txt>
           <PillSwitch value={keepAwake} onToggle={() => toggleFlag('keepAwake')} />
         </View>

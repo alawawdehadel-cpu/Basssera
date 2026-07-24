@@ -2,12 +2,13 @@ import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Animated, View } from 'react-native';
 import { usePlayback, RECITERS } from '../../hooks/usePlayback';
+import { useAppLanguage } from '../../hooks/useAppLanguage';
 import { useToast } from './Toast';
 import { FONT } from '../../theme/fonts';
 import { useTheme } from '../../theme/ThemeContext';
 import type { QuranReference } from '../../types/answer.types';
 import { getSurahMeta, getSurahList } from '../../utils/quranDataLoader';
-import { toArabicDigits } from '../../utils/numerals';
+import { formatNumber } from '../../utils/numerals';
 import { Press } from './primitives';
 import Txt from './Txt';
 
@@ -33,6 +34,7 @@ function surahNumberByName(name: string): number | null {
  */
 export default function EvidenceCard({ reference, index }: { reference: QuranReference; index: number }) {
   const { colors } = useTheme();
+  const { t } = useAppLanguage();
   const { showToast } = useToast();
   const { startTrack } = usePlayback();
   const anim = useRef(new Animated.Value(0)).current;
@@ -64,11 +66,11 @@ export default function EvidenceCard({ reference, index }: { reference: QuranRef
       <View style={{ padding: 14, paddingBottom: 10 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
           <Txt size={12} weight={700} color={colors.emerald}>
-            {reference.surah} {reference.ayah ? `• ${toArabicDigits(reference.ayah)}` : ''}
+            {reference.surah} {reference.ayah ? `• ${formatNumber(reference.ayah)}` : ''}
           </Txt>
           <View style={{ backgroundColor: colors.goldTint, paddingVertical: 3, paddingHorizontal: 8, borderRadius: 8 }}>
             <Txt size={9} weight={700} color={colors.gold}>
-              نصّ قرآني
+              {t('tafsir.quranText')}
             </Txt>
           </View>
         </View>
@@ -85,7 +87,7 @@ export default function EvidenceCard({ reference, index }: { reference: QuranRef
       <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.border }}>
         {[
           {
-            label: 'فتح الآية',
+            label: t('assistant.openVerse'),
             color: colors.emerald,
             onPress: () => {
               if (surahNumber) {
@@ -94,7 +96,7 @@ export default function EvidenceCard({ reference, index }: { reference: QuranRef
             },
           },
           {
-            label: 'عرض التفسير',
+            label: t('assistant.showTafsir'),
             color: colors.text,
             onPress: () => {
               if (surahNumber) {
@@ -103,7 +105,7 @@ export default function EvidenceCard({ reference, index }: { reference: QuranRef
             },
           },
           {
-            label: 'استماع',
+            label: t('verse.listen'),
             color: colors.text,
             onPress: () => {
               if (surahNumber) {
@@ -114,7 +116,7 @@ export default function EvidenceCard({ reference, index }: { reference: QuranRef
                   ayahCount: meta?.ayahCount ?? 10,
                   reciter: RECITERS[1],
                 });
-                showToast('جارٍ التشغيل');
+                showToast(t('playback.starting'));
               }
             },
           },

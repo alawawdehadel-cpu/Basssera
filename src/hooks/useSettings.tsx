@@ -15,6 +15,15 @@ const SETTINGS_KEY = 'basirah-settings-v1';
 export const FONT_STEPS = [22, 25, 27, 30, 34] as const;
 export const FONT_STEP_LABELS = ['صغير', 'متوسط', 'كبير', 'أكبر', 'ضخم'] as const;
 
+/** Translation keys for the font-size steps, so the labels follow the UI language. */
+export const FONT_STEP_KEYS = [
+  'font.small',
+  'font.medium',
+  'font.large',
+  'font.xlarge',
+  'font.huge',
+] as const;
+
 export function fontStepFromSize(size: number): number {
   let best = 0;
   let bestDiff = Infinity;

@@ -3,11 +3,12 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Share, TextInput, View } from 'react-native';
 import { usePlayback, RECITERS } from '../../hooks/usePlayback';
+import { useAppLanguage } from '../../hooks/useAppLanguage';
 import { useUserData } from '../../hooks/useUserData';
 import { FONT } from '../../theme/fonts';
 import { useTheme } from '../../theme/ThemeContext';
 import type { QuranAyah } from '../../types/quran.types';
-import { stripSurahPrefix, toArabicDigits } from '../../utils/numerals';
+import { formatNumber, stripSurahPrefix } from '../../utils/numerals';
 import { getSurahMeta } from '../../utils/quranDataLoader';
 import BottomSheet from './BottomSheet';
 import Icon, { type IconName } from './Icon';
@@ -27,6 +28,7 @@ interface VerseActionSheetProps {
  */
 export default function VerseActionSheet({ verse, onClose }: VerseActionSheetProps) {
   const { colors } = useTheme();
+  const { t } = useAppLanguage();
   const { showToast } = useToast();
   const { startTrack } = usePlayback();
   const { isBookmarked, toggleVerseBookmark, notes, setNote } = useUserData();
@@ -48,7 +50,7 @@ export default function VerseActionSheet({ verse, onClose }: VerseActionSheetPro
 
   const bookmarked = isBookmarked(verse.surahNumber, verse.ayahNumber);
   const surahLabel = stripSurahPrefix(verse.surahNameArabic);
-  const refLabel = `سورة ${surahLabel} • الآية ${toArabicDigits(verse.ayahNumber)}`;
+  const refLabel = `${t('common.surah')} ${surahLabel} • ${t('common.ayah')} ${formatNumber(verse.ayahNumber)}`;
 
   const toggleBm = async () => {
     const added = await toggleVerseBookmark({
@@ -58,12 +60,12 @@ export default function VerseActionSheet({ verse, onClose }: VerseActionSheetPro
       surahNameArabic: verse.surahNameArabic,
       surahNameEnglish: verse.surahNameEnglish,
     });
-    showToast(added ? 'تمت إضافة العلامة' : 'أُزيلت العلامة');
+    showToast(added ? t('bookmark.added') : t('bookmark.removed'));
   };
 
   const actions: { label: string; icon: IconName; filled?: boolean; gold?: boolean; onPress: () => void }[] = [
     {
-      label: 'استماع',
+      label: t('verse.listen'),
       icon: 'play',
       onPress: () => {
         const meta = getSurahMeta(verse.surahNumber);
@@ -73,12 +75,12 @@ export default function VerseActionSheet({ verse, onClose }: VerseActionSheetPro
           ayahCount: meta?.ayahCount ?? 10,
           reciter: RECITERS[1],
         });
-        showToast('جارٍ التشغيل');
+        showToast(t('playback.starting'));
         onClose();
       },
     },
     {
-      label: 'تفسير',
+      label: t('verse.tafsir'),
       icon: 'book',
       onPress: () => {
         onClose();
@@ -88,24 +90,24 @@ export default function VerseActionSheet({ verse, onClose }: VerseActionSheetPro
         });
       },
     },
-    { label: 'حفظ', icon: 'bookmark', filled: bookmarked, gold: bookmarked, onPress: toggleBm },
-    { label: 'ملاحظة', icon: 'pencil', onPress: () => setNoteOpen((v) => !v) },
-    { label: 'تكرار', icon: 'repeat', onPress: () => showToast('اضبط التكرار أدناه') },
+    { label: t('verse.save'), icon: 'bookmark', filled: bookmarked, gold: bookmarked, onPress: toggleBm },
+    { label: t('verse.note'), icon: 'pencil', onPress: () => setNoteOpen((v) => !v) },
+    { label: t('verse.repeat'), icon: 'repeat', onPress: () => showToast(t('verse.repeatHint')) },
     {
-      label: 'نسخ',
+      label: t('verse.copy'),
       icon: 'copy',
       onPress: async () => {
         try {
           await Clipboard.setStringAsync(`${verse.textUthmani}\n${refLabel}`);
-          showToast('تم النسخ');
+          showToast(t('common.copied'));
         } catch {
-          showToast('تعذّر النسخ');
+          showToast(t('common.copyFailed'));
         }
         onClose();
       },
     },
     {
-      label: 'مشاركة',
+      label: t('verse.share'),
       icon: 'share',
       onPress: async () => {
         try {
@@ -116,13 +118,13 @@ export default function VerseActionSheet({ verse, onClose }: VerseActionSheetPro
       },
     },
     {
-      label: 'اسأل بصيرة',
+      label: t('verse.ask'),
       icon: 'spark',
       onPress: () => {
         onClose();
         router.push({
           pathname: '/(tabs)/assistant',
-          params: { ask: `ما تفسير الآية ${toArabicDigits(verse.ayahNumber)} من سورة ${surahLabel}؟` },
+          params: { ask: t('verse.askTafsirOf', { ayah: formatNumber(verse.ayahNumber), surah: surahLabel }) },
         });
       },
     },
@@ -196,12 +198,12 @@ export default function VerseActionSheet({ verse, onClose }: VerseActionSheetPro
           }}
         >
           <Txt size={13} weight={700} color={colors.text}>
-            ملاحظة شخصية
+            {t('verse.personalNote')}
           </Txt>
           <TextInput
             value={noteDraft}
             onChangeText={setNoteDraft}
-            placeholder="اكتب ملاحظتك على هذه الآية..."
+            placeholder={t('verse.notePlaceholder')}
             placeholderTextColor={colors.text3}
             multiline
             style={{
@@ -215,12 +217,12 @@ export default function VerseActionSheet({ verse, onClose }: VerseActionSheetPro
             }}
           />
           <PrimaryButton
-            title="حفظ الملاحظة"
+            title={t('verse.saveNote')}
             height={44}
             onPress={() => {
               setNote(verseId, noteDraft);
               setNoteOpen(false);
-              showToast(noteDraft.trim() ? 'حُفظت الملاحظة' : 'أُزيلت الملاحظة');
+              showToast(noteDraft.trim() ? t('verse.noteSaved') : t('verse.noteRemoved'));
             }}
           />
         </View>
@@ -238,17 +240,17 @@ export default function VerseActionSheet({ verse, onClose }: VerseActionSheetPro
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
           <Icon name="repeat" size={17} color={colors.emerald} strokeWidth={1.8} />
           <Txt size={14} weight={700} color={colors.text}>
-            إعدادات التكرار
+            {t('verse.repeatSettings')}
           </Txt>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <Txt size={12.5} color={colors.text2}>
-            عدد مرات التكرار
+            {t('verse.repeatCount')}
           </Txt>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <Press
               onPress={() => setRepeatCount((c) => Math.max(1, c - 1))}
-              accessibilityLabel="أقل"
+              accessibilityLabel={t('verse.less')}
               style={{
                 width: 30,
                 height: 30,
@@ -265,11 +267,11 @@ export default function VerseActionSheet({ verse, onClose }: VerseActionSheetPro
               </Txt>
             </Press>
             <Txt size={14} weight={700} color={colors.text} align="center" style={{ minWidth: 20 }}>
-              {toArabicDigits(repeatCount)}
+              {formatNumber(repeatCount)}
             </Txt>
             <Press
               onPress={() => setRepeatCount((c) => Math.min(9, c + 1))}
-              accessibilityLabel="أكثر"
+              accessibilityLabel={t('verse.more')}
               style={{
                 width: 30,
                 height: 30,
@@ -289,10 +291,10 @@ export default function VerseActionSheet({ verse, onClose }: VerseActionSheetPro
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Txt size={12.5} color={colors.text2}>
-            وقفة بين التكرارات
+            {t('verse.pauseBetween')}
           </Txt>
           <Txt size={12.5} weight={700} color={colors.emerald}>
-            {toArabicDigits(2)} ث
+            {t('verse.seconds', { n: formatNumber(2) })}
           </Txt>
         </View>
       </View>

@@ -9,27 +9,28 @@ import { AyahBadge, Card, Chip, Press } from '../src/components/basirah/primitiv
 import { useToast } from '../src/components/basirah/Toast';
 import Txt from '../src/components/basirah/Txt';
 import { usePlayback, RECITERS } from '../src/hooks/usePlayback';
+import { useAppLanguage } from '../src/hooks/useAppLanguage';
 import { useUserData } from '../src/hooks/useUserData';
 import { FONT } from '../src/theme/fonts';
 import { useTheme } from '../src/theme/ThemeContext';
 import { LAYOUT } from '../src/theme/tokens';
 import type { TafseerGroup } from '../src/types/data.types';
 import { loadTafseerData } from '../src/utils/dataLoader';
-import { stripSurahPrefix, toArabicDigits } from '../src/utils/numerals';
+import { formatNumber, stripSurahPrefix } from '../src/utils/numerals';
 import { getAyah, getSurahMeta } from '../src/utils/quranDataLoader';
 
 const SOURCES = [
-  { key: 'muyassar', label: 'التفسير الميسر', available: false },
-  { key: 'kathir', label: 'تفسير ابن كثير', available: false },
-  { key: 'saadi', label: 'تفسير السعدي', available: true },
-  { key: 'tabari', label: 'تفسير الطبري', available: false },
+  { key: 'muyassar', labelKey: 'tafsir.source.muyassar' as const, available: false },
+  { key: 'kathir', labelKey: 'tafsir.source.kathir' as const, available: false },
+  { key: 'saadi', labelKey: 'tafsir.source.saadi' as const, available: true },
+  { key: 'tabari', labelKey: 'tafsir.source.tabari' as const, available: false },
 ];
 
 const SECTIONS = [
-  { key: 'words', glyph: '﷽', title: 'معاني الكلمات' },
-  { key: 'reasons', glyph: '◈', title: 'أسباب النزول' },
-  { key: 'benefits', glyph: '✦', title: 'فوائد وتدبرات' },
-  { key: 'related', glyph: '❖', title: 'آيات ذات صلة' },
+  { key: 'words', glyph: '﷽', titleKey: 'tafsir.section.words' as const },
+  { key: 'reasons', glyph: '◈', titleKey: 'tafsir.section.reasons' as const },
+  { key: 'benefits', glyph: '✦', titleKey: 'tafsir.section.benefits' as const },
+  { key: 'related', glyph: '❖', titleKey: 'tafsir.section.related' as const },
 ];
 
 export default function TafsirScreen() {
@@ -38,6 +39,7 @@ export default function TafsirScreen() {
   const ayahNumber = Math.max(1, Number(params.ayah) || 1);
 
   const { colors } = useTheme();
+  const { t } = useAppLanguage();
   const { showToast } = useToast();
   const { startTrack } = usePlayback();
   const { isBookmarked, toggleVerseBookmark } = useUserData();
@@ -56,7 +58,7 @@ export default function TafsirScreen() {
   const surahName = stripSurahPrefix(
     verse?.surahNameArabic ?? getSurahMeta(surahNumber)?.nameArabic ?? '',
   );
-  const refLabel = `سورة ${surahName} • الآية ${toArabicDigits(ayahNumber)}`;
+  const refLabel = `${t('common.surah')} ${surahName} • ${t('common.ayah')} ${formatNumber(ayahNumber)}`;
 
   const group = useMemo(
     () =>
@@ -92,7 +94,7 @@ export default function TafsirScreen() {
       surahNameArabic: verse.surahNameArabic,
       surahNameEnglish: verse.surahNameEnglish,
     });
-    showToast(added ? 'تمت إضافة العلامة' : 'أُزيلت العلامة');
+    showToast(added ? t('bookmark.added') : t('bookmark.removed'));
   };
 
   return (
@@ -109,7 +111,7 @@ export default function TafsirScreen() {
       >
         <Press
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
-          accessibilityLabel="رجوع"
+          accessibilityLabel={t('common.back')}
           style={{
             width: 38,
             height: 38,
@@ -125,7 +127,7 @@ export default function TafsirScreen() {
         </Press>
         <View>
           <Txt size={18} weight={700} color={colors.text}>
-            التفسير
+            {t('tafsir.title')}
           </Txt>
           <Txt size={12} color={colors.text2}>
             {refLabel}
@@ -155,7 +157,7 @@ export default function TafsirScreen() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
               <Txt size={10} weight={700} color={colors.gold} style={{ letterSpacing: 0.5 }}>
-                نصّ قرآني
+                {t('tafsir.quranText')}
               </Txt>
               <AyahBadge number={ayahNumber} size={24} />
             </View>
@@ -188,9 +190,9 @@ export default function TafsirScreen() {
                     ayahCount: meta?.ayahCount ?? 10,
                     reciter: RECITERS[1],
                   });
-                  showToast('جارٍ التشغيل');
+                  showToast(t('playback.starting'));
                 }}
-                accessibilityLabel="استماع"
+                accessibilityLabel={t('verse.listen')}
                 style={{
                   width: 36,
                   height: 36,
@@ -204,7 +206,7 @@ export default function TafsirScreen() {
               </Press>
               <Press
                 onPress={toggleBm}
-                accessibilityLabel="حفظ"
+                accessibilityLabel={t('verse.save')}
                 style={{
                   width: 36,
                   height: 36,
@@ -222,12 +224,12 @@ export default function TafsirScreen() {
                 onPress={async () => {
                   try {
                     await Clipboard.setStringAsync(`${verse?.textUthmani ?? ''}\n${refLabel}`);
-                    showToast('تم النسخ');
+                    showToast(t('common.copied'));
                   } catch {
-                    showToast('تعذّر النسخ');
+                    showToast(t('common.copyFailed'));
                   }
                 }}
-                accessibilityLabel="نسخ"
+                accessibilityLabel={t('verse.copy')}
                 style={{
                   width: 36,
                   height: 36,
@@ -253,7 +255,7 @@ export default function TafsirScreen() {
           contentContainerStyle={{ paddingHorizontal: LAYOUT.screenX, gap: 8 }}
         >
           {SOURCES.map((s) => (
-            <Chip key={s.key} label={s.label} active={source === s.key} onPress={() => setSource(s.key)} height={36} />
+            <Chip key={s.key} label={t(s.labelKey)} active={source === s.key} onPress={() => setSource(s.key)} height={36} />
           ))}
         </ScrollView>
 
@@ -262,30 +264,30 @@ export default function TafsirScreen() {
           <View style={{ marginBottom: 18 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
               <Txt size={15} weight={700} color={colors.text}>
-                تفسير السعدي
+                {t('tafsir.saadi')}
               </Txt>
               <View style={{ backgroundColor: colors.surface2, paddingVertical: 3, paddingHorizontal: 8, borderRadius: 8 }}>
                 <Txt size={10} color={colors.text2}>
-                  مصدر موثّق
+                  {t('tafsir.trustedSource')}
                 </Txt>
               </View>
               {group && (group.ayah_start !== group.ayah_end) ? (
                 <Txt size={10} color={colors.text3}>
-                  الآيات {toArabicDigits(group.ayah_start)}–{toArabicDigits(group.ayah_end)}
+                  {t('tafsir.ayatRange', { from: formatNumber(group.ayah_start), to: formatNumber(group.ayah_end) })}
                 </Txt>
               ) : null}
             </View>
             {groups === null ? (
               <Txt size={13} color={colors.text3}>
-                جارٍ تحميل التفسير...
+                {t('tafsir.loading')}
               </Txt>
             ) : group ? (
               <Txt size={15} lh={2} color={colors.text2} style={{ textAlign: 'justify' }}>
-                {toArabicDigits(group.explanation.trim())}
+                {formatNumber(group.explanation.trim())}
               </Txt>
             ) : (
               <Txt size={13} lh={1.9} color={colors.text2}>
-                لا يتوفر تفسير لهذه الآية في البيانات المحلية.
+                {t('tafsir.notAvailable')}
               </Txt>
             )}
           </View>
@@ -303,10 +305,10 @@ export default function TafsirScreen() {
               }}
             >
               <Txt size={13} weight={700} color={colors.text} align="center" style={{ marginBottom: 6 }}>
-                مصدر غير متوفر
+                {t('tafsir.sourceUnavailable')}
               </Txt>
               <Txt size={12.5} lh={1.7} color={colors.text2} align="center">
-                هذا التفسير غير مضمّن في بيانات التطبيق المحلية بعد. المتوفر حاليًا: تفسير السعدي.
+                {t('tafsir.sourceUnavailableBody')}
               </Txt>
             </View>
           </View>
@@ -335,7 +337,7 @@ export default function TafsirScreen() {
                       {sec.glyph}
                     </Txt>
                     <Txt size={14} weight={600} color={colors.text}>
-                      {sec.title}
+                      {t(sec.titleKey)}
                     </Txt>
                   </View>
                   <View style={{ transform: [{ rotate: isOpen ? '180deg' : '0deg' }] }}>
@@ -388,13 +390,12 @@ export default function TafsirScreen() {
                         </View>
                       ) : (
                         <Txt size={13} lh={1.9} color={colors.text2}>
-                          هذه الآية مفردة في مقطع التفسير — لا آيات مرتبطة ضمن المقطع نفسه.
+                          {t('tafsir.noRelated')}
                         </Txt>
                       )
                     ) : (
                       <Txt size={13} lh={1.9} color={colors.text2}>
-                        هذا القسم يتطلب مصدرًا موثّقًا غير مضمّن في البيانات المحلية بعد، ولن يعرض التطبيق
-                        محتوى غير موثّق.
+                        {t('tafsir.sectionUnavailable')}
                       </Txt>
                     )}
                   </View>
@@ -418,13 +419,13 @@ export default function TafsirScreen() {
             }}
           >
             <Txt size={10} weight={700} color={colors.gold} style={{ marginBottom: 6 }}>
-              شرح مساعد — بصيرة
+              {t('tafsir.assistantExplain')}
             </Txt>
             <Txt size={13} lh={1.9} color={colors.text2}>
-              {toArabicDigits(aiSummary)}
+              {formatNumber(aiSummary)}
             </Txt>
             <Txt size={9.5} color={colors.text3} style={{ marginTop: 8 }}>
-              خلاصة مقتطفة حرفيًا من تفسير السعدي — ليست نصًا مولّدًا.
+              {t('tafsir.assistantNote')}
             </Txt>
           </View>
         ) : null}
@@ -435,7 +436,7 @@ export default function TafsirScreen() {
         onPress={() =>
           router.push({
             pathname: '/(tabs)/assistant',
-            params: { ask: `ما تفسير الآية ${toArabicDigits(ayahNumber)} من سورة ${surahName}؟` },
+            params: { ask: t('verse.askTafsirOf', { ayah: formatNumber(ayahNumber), surah: surahName }) },
           })
         }
         style={{
@@ -458,7 +459,7 @@ export default function TafsirScreen() {
       >
         <Icon name="spark" size={18} color="#DFC96C" strokeWidth={1.8} />
         <Txt size={14} weight={700} color="#fff">
-          اسأل عن هذه الآية
+          {t('tafsir.askAboutVerse')}
         </Txt>
       </Press>
     </SafeAreaView>

@@ -45,6 +45,7 @@ const FEATURES = [
   { titleKey: 'home.feature.assistant' as const, icon: 'spark' as const, gold: true, href: '/(tabs)/assistant' },
   { titleKey: 'home.feature.recitations' as const, icon: 'headphones' as const, gold: false, href: '/(tabs)/recitations' },
   { titleKey: 'home.feature.bookmarks' as const, icon: 'bookmark' as const, gold: true, href: '/(tabs)/library' },
+  { titleKey: 'hadith.title' as const, icon: 'book' as const, gold: false, href: '/hadith' },
 ];
 
 export default function HomeScreen() {

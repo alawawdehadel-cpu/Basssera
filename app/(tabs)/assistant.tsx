@@ -8,25 +8,27 @@ import Icon from '../../src/components/basirah/Icon';
 import { Press } from '../../src/components/basirah/primitives';
 import { useToast } from '../../src/components/basirah/Toast';
 import Txt from '../../src/components/basirah/Txt';
+import { useAppLanguage } from '../../src/hooks/useAppLanguage';
 import { useAssistant, type AssistantTurn } from '../../src/hooks/useAssistant';
 import { useUserData } from '../../src/hooks/useUserData';
-import { toArabicDigits } from '../../src/utils/numerals';
+import { formatNumber } from '../../src/utils/numerals';
 import { FONT } from '../../src/theme/fonts';
 import { useTheme } from '../../src/theme/ThemeContext';
 import { LAYOUT } from '../../src/theme/tokens';
 
-const SUGGESTED = [
-  'ما معنى قوله تعالى في سورة الرعد؟',
-  'أعطني آيات عن الصبر',
-  'ما الفرق بين التفسير والترجمة؟',
-  'اشرح لي موضوع سورة الملك باختصار',
-];
+const SUGGESTED_KEYS = [
+  'assistant.suggest.1',
+  'assistant.suggest.2',
+  'assistant.suggest.3',
+  'assistant.suggest.4',
+] as const;
 
-const FOLLOWUPS = ['كيف أتدبر هذه الآيات؟', 'اذكر آية أخرى في الموضوع'];
+const FOLLOWUP_KEYS = ['assistant.followUp.1', 'assistant.followUp.2'] as const;
 
 /** Pulsing three-dot thinking indicator. */
 function ThinkingDots() {
   const { colors } = useTheme();
+  const { t } = useAppLanguage();
   const dots = [useRef(new Animated.Value(0.25)).current, useRef(new Animated.Value(0.25)).current, useRef(new Animated.Value(0.25)).current];
 
   useEffect(() => {
@@ -67,7 +69,7 @@ function ThinkingDots() {
         ))}
       </View>
       <Txt size={12.5} color={colors.text2}>
-        أبحث في المصادر الموثّقة...
+        {t('assistant.thinking')}
       </Txt>
     </View>
   );
@@ -116,6 +118,7 @@ function PulsingSpark() {
 
 function AnswerBlock({ turn }: { turn: AssistantTurn }) {
   const { colors } = useTheme();
+  const { t } = useAppLanguage();
   const { showToast } = useToast();
   const { saveAnswer } = useUserData();
   const answer = turn.answer!;
@@ -123,7 +126,7 @@ function AnswerBlock({ turn }: { turn: AssistantTurn }) {
   const feedbackRow = (
     <View style={{ flexDirection: 'row', gap: 8, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.border }}>
       <Press
-        onPress={() => showToast('شكرًا لتقييمك')}
+        onPress={() => showToast(t('assistant.thanksRating'))}
         style={{
           flexDirection: 'row',
           alignItems: 'center',
@@ -138,12 +141,12 @@ function AnswerBlock({ turn }: { turn: AssistantTurn }) {
       >
         <Icon name="thumbUp" size={14} color={colors.text} strokeWidth={1.8} />
         <Txt size={11.5} weight={600} color={colors.text}>
-          مفيد
+          {t('assistant.helpful')}
         </Txt>
       </Press>
       <Press
-        onPress={() => showToast('شكرًا لملاحظتك')}
-        accessibilityLabel="غير مفيد"
+        onPress={() => showToast(t('assistant.thanksFeedback'))}
+        accessibilityLabel={t('assistant.notHelpful')}
         style={{
           width: 38,
           height: 36,
@@ -161,12 +164,12 @@ function AnswerBlock({ turn }: { turn: AssistantTurn }) {
         onPress={async () => {
           try {
             await Clipboard.setStringAsync(answer.summary);
-            showToast('تم النسخ');
+            showToast(t('common.copied'));
           } catch {
-            showToast('تعذّر النسخ');
+            showToast(t('common.copyFailed'));
           }
         }}
-        accessibilityLabel="نسخ"
+        accessibilityLabel={t('verse.copy')}
         style={{
           width: 38,
           height: 36,
@@ -183,9 +186,9 @@ function AnswerBlock({ turn }: { turn: AssistantTurn }) {
       <Press
         onPress={() => {
           saveAnswer(turn.question, answer.summary);
-          showToast('حُفظت الإجابة');
+          showToast(t('assistant.answerSaved'));
         }}
-        accessibilityLabel="حفظ"
+        accessibilityLabel={t('verse.save')}
         style={{
           width: 38,
           height: 36,
@@ -216,15 +219,15 @@ function AnswerBlock({ turn }: { turn: AssistantTurn }) {
         }}
       >
         <Txt size={10} weight={700} color={colors.gold} style={{ marginBottom: 8 }}>
-          شرح مساعد
+          {t('assistant.helper')}
         </Txt>
         {answer.title ? (
           <Txt size={14} weight={700} color={colors.text} style={{ marginBottom: 6 }}>
-            {toArabicDigits(answer.title)}
+            {formatNumber(answer.title)}
           </Txt>
         ) : null}
         <Txt size={14} lh={1.9} color={colors.text}>
-          {toArabicDigits(answer.summary)}
+          {formatNumber(answer.summary)}
         </Txt>
         {answer.safetyNote ? (
           <View
@@ -251,7 +254,7 @@ function AnswerBlock({ turn }: { turn: AssistantTurn }) {
       {answer.quranReferences.length > 0 ? (
         <>
           <Txt size={12} weight={700} color={colors.text2} style={{ marginBottom: 10 }}>
-            الأدلة القرآنية
+            {t('assistant.evidence')}
           </Txt>
           <View style={{ gap: 12, marginBottom: 18 }}>
             {answer.quranReferences.map((ref, i) => (
@@ -265,7 +268,7 @@ function AnswerBlock({ turn }: { turn: AssistantTurn }) {
       {answer.tafsirReferences.length > 0 ? (
         <View style={{ marginBottom: 18 }}>
           <Txt size={12} weight={700} color={colors.text2} style={{ marginBottom: 10 }}>
-            من تفسير السعدي
+            {t('assistant.fromSaadi')}
           </Txt>
           {answer.tafsirReferences.map((ref, i) => (
             <View
@@ -279,7 +282,7 @@ function AnswerBlock({ turn }: { turn: AssistantTurn }) {
               }}
             >
               <Txt size={13} lh={1.9} color={colors.text2} style={{ textAlign: 'justify' }}>
-                {toArabicDigits(ref.excerpt)}
+                {formatNumber(ref.excerpt)}
               </Txt>
             </View>
           ))}
@@ -294,6 +297,7 @@ function AnswerBlock({ turn }: { turn: AssistantTurn }) {
 export default function AssistantScreen() {
   const params = useLocalSearchParams<{ ask?: string }>();
   const { colors } = useTheme();
+  const { t } = useAppLanguage();
   const { turns, thinking, ask } = useAssistant();
   const [input, setInput] = useState('');
   const scrollRef = useRef<ScrollView>(null);
@@ -340,10 +344,10 @@ export default function AssistantScreen() {
         <PulsingSpark />
         <View>
           <Txt size={22} weight={700} color={colors.text}>
-            اسأل بصيرة
+            {t('assistant.title')}
           </Txt>
           <Txt size={11.5} color={colors.emerald}>
-            ● متّصل • إجابات مرتبطة بالمصادر
+            {t('assistant.status')}
           </Txt>
         </View>
       </View>
@@ -366,18 +370,18 @@ export default function AssistantScreen() {
               }}
             >
               <Txt size={19} weight={700} amiri color={colors.emerald} style={{ marginBottom: 6 }}>
-                مرحبًا بك
+                {t('assistant.welcome')}
               </Txt>
               <Txt size={14} lh={1.8} color={colors.text2}>
-                كيف يمكنني مساعدتك في فهم القرآن اليوم؟
+                {t('assistant.welcomeBody')}
               </Txt>
             </View>
 
             <View style={{ gap: 10, marginBottom: 16 }}>
-              {SUGGESTED.map((q) => (
+              {SUGGESTED_KEYS.map((k) => (
                 <Press
-                  key={q}
-                  onPress={() => submit(q)}
+                  key={k}
+                  onPress={() => submit(t(k))}
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -392,7 +396,7 @@ export default function AssistantScreen() {
                   }}
                 >
                   <Txt size={13.5} color={colors.text} style={{ flex: 1 }}>
-                    {q}
+                    {t(k)}
                   </Txt>
                   <Icon name="arrowGo" size={16} color={colors.emerald} strokeWidth={2} />
                 </Press>
@@ -429,12 +433,12 @@ export default function AssistantScreen() {
             {!thinking && turns[turns.length - 1]?.answer ? (
               <View style={{ gap: 8 }}>
                 <Txt size={12} weight={700} color={colors.text2}>
-                  أسئلة مقترحة للمتابعة
+                  {t('assistant.followUps')}
                 </Txt>
-                {FOLLOWUPS.map((f) => (
+                {FOLLOWUP_KEYS.map((f) => (
                   <Press
                     key={f}
-                    onPress={() => submit(f)}
+                    onPress={() => submit(t(f))}
                     style={{
                       paddingVertical: 11,
                       paddingHorizontal: 14,
@@ -445,7 +449,7 @@ export default function AssistantScreen() {
                     }}
                   >
                     <Txt size={12.5} color={colors.emerald}>
-                      {f}
+                      {t(f)}
                     </Txt>
                   </Press>
                 ))}
@@ -471,8 +475,7 @@ export default function AssistantScreen() {
             >
               <Icon name="info" size={16} color={colors.gold} strokeWidth={1.8} />
               <Txt size={11.5} lh={1.7} color={colors.text2} style={{ flex: 1 }}>
-                يقدّم المساعد إجابات تعليمية مرتبطة بالمصادر، ولا يُعد بديلًا عن سؤال أهل العلم في الفتاوى
-                والمسائل الشرعية الخاصة.
+                {t('assistant.disclaimer')}
               </Txt>
             </View>
           </>
@@ -510,7 +513,7 @@ export default function AssistantScreen() {
             onChangeText={setInput}
             onSubmitEditing={() => submit()}
             returnKeyType="send"
-            placeholder="اكتب سؤالك هنا..."
+            placeholder={t('assistant.placeholder')}
             placeholderTextColor={colors.text2}
             style={{
               flex: 1,
@@ -523,7 +526,7 @@ export default function AssistantScreen() {
           />
           <Press
             onPress={() => submit()}
-            accessibilityLabel="إرسال"
+            accessibilityLabel={t('assistant.send')}
             style={{
               width: 44,
               height: 44,
