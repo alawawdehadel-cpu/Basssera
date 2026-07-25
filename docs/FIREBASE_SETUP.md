@@ -36,35 +36,43 @@ firebase login
 `firebase login` opens a browser for Google sign-in. Do this yourself — never
 paste Google credentials into any tool.
 
-## 2. Create the project
+## 2. The project
 
-Either the console (https://console.firebase.google.com → **Add project**) or:
-
-```powershell
-firebase projects:create --display-name "Baseera"
-```
-
-Project ids are globally unique, so you may need a suffix (`baseera-app-2026`).
-Then point this repo at it — this rewrites `.firebaserc`:
+This repo targets the existing project **`bassera-fe862`**, already set in
+`.firebaserc`. Confirm the CLI agrees:
 
 ```powershell
-firebase use --add
+firebase use
+firebase projects:list
 ```
 
-## 3. Create the Firestore database
+If you ever need to point somewhere else: `firebase use --add`.
 
-Console → **Build → Firestore Database → Create database**.
+## 3. Firestore database
 
-- Start in **Production mode**. Do NOT pick test mode — it leaves the database
+Console → **Build → Firestore Database**.
+
+If a database already exists, note its region and skip ahead — **the region is
+permanent and cannot be moved**. That is fine for this app either way: tafsir
+passages are cached on-device after first read, so region only affects the
+first fetch of each passage.
+
+If there is no database yet, **Create database**:
+
+- **Production mode.** Do NOT pick test mode — it leaves the database
   world-writable for 30 days, and this repo ships real rules already.
-- Pick a region close to your users (`eur3`, `nam5`, `me-central1`, …).
-  **The region cannot be changed later.**
+- Region **`me-central1` (Doha)** — closest to Jordan and the Gulf.
 
 CLI alternative (availability varies by CLI version):
 
 ```powershell
-firebase firestore:databases:create "(default)" --location=eur3
+firebase firestore:databases:create "(default)" --location=me-central1
 ```
+
+> **Reusing an existing project:** `firebase deploy --only firestore:rules`
+> **replaces** whatever rules are currently live. If anything else already
+> talks to `bassera-fe862`, check what collections exist and what rules are
+> deployed before step 5, or you may break it.
 
 ## 4. Register a Web App and capture the config
 
