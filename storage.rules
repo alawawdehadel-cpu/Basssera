@@ -1,0 +1,44 @@
+rules_version = '2';
+
+// بصيرة (Baseera) — Cloud Storage security rules.
+//
+// Storage holds ONE thing: user avatars. The tafsir corpus lives in Firestore,
+// not here — a 163 MB JSON in a Storage bucket would just move the problem
+// rather than solve it, since the client would still have to download and parse
+// the whole thing to answer one question.
+//
+// Everything outside avatars/{uid}/ is denied by default.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function isImage() {
+      return request.resource.contentType != null
+             && request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+
+    function isReasonableSize() {
+      return request.resource.size > 0
+             && request.resource.size < 5 * 1024 * 1024;   // 5 MB
+    }
+
+    match /avatars/{userId}/{fileName} {
+      // Avatars are shown in the app's own UI to the signed-in owner. Keeping
+      // read owner-only (rather than public) matches an app that has no social
+      // features and advertises no tracking — nothing else needs to see them.
+      allow read: if isOwner(userId);
+
+      allow write: if isOwner(userId) && isImage() && isReasonableSize();
+
+      allow delete: if isOwner(userId);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

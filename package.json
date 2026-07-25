@@ -14,7 +14,13 @@
     "inspect:tafsir": "node scripts/inspectTafsirData.js",
     "validate:tafsir": "node scripts/validateTafsirData.js",
     "test:tafsir": "node scripts/testTafsirEngine.js",
-    "build:tafsir-chunks": "node scripts/buildTafsirChunks.js"
+    "build:tafsir-chunks": "node scripts/buildTafsirChunks.js",
+    "firebase:tafsir:validate": "node scripts/firebase/validateTafsir.mjs",
+    "firebase:tafsir:assets": "node scripts/firebase/buildTafsirAssets.mjs",
+    "firebase:tafsir:selfcheck": "node scripts/firebase/importTafsir.mjs --self-check",
+    "firebase:tafsir:dry-run": "node scripts/firebase/importTafsir.mjs --all --dry-run",
+    "firebase:tafsir:import": "node scripts/firebase/importTafsir.mjs --all",
+    "firebase:tafsir:verify": "node scripts/firebase/importTafsir.mjs --all --verify"
   },
   "dependencies": {
     "@expo-google-fonts/amiri": "^0.2.3",
@@ -30,6 +36,7 @@
     "expo-location": "~17.0.1",
     "expo-router": "~3.5.23",
     "expo-status-bar": "~1.12.1",
+    "firebase": "^10.14.1",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-native": "0.74.5",
@@ -42,6 +49,7 @@
     "@babel/core": "^7.24.0",
     "@types/react": "~18.2.79",
     "babel-preset-expo": "~11.0.0",
+    "firebase-admin": "^14.2.0",
     "typescript": "~5.3.3"
   }
 }

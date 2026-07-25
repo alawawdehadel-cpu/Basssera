@@ -137,7 +137,15 @@ function TafsirResultCardBase({ group }: TafsirResultCardProps) {
 
       {group.notFound ? (
         <Txt size={12.5} lh={1.8} color={colors.text2} style={{ writingDirection: 'rtl' }}>
-          {`لم أجد نصًا مطابقًا في ${group.sourceArabic} لهذه الآية ضمن بيانات التطبيق.`}
+          {/*
+            Two different truths, never conflated: the passage genuinely does
+            not exist in this source, vs. it exists but could not be loaded.
+            Saying "not found in the app data" about text we simply failed to
+            fetch would misrepresent the scholar's work.
+          */}
+          {group.unavailable
+            ? `يتطلب عرض ${group.sourceArabic} لهذه الآية اتصالًا بالإنترنت.`
+            : `لم أجد نصًا مطابقًا في ${group.sourceArabic} لهذه الآية ضمن بيانات التطبيق.`}
         </Txt>
       ) : single && firstRef ? (
         <>

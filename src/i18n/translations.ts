@@ -473,6 +473,17 @@ export const AR = {
   'hadith.connectionFailed': 'تعذر الاتصال بخادم الدرر السنية',
   'hadith.invalidResponse': 'استجابة غير صالحة من الخادم',
 
+  /* tafsir fetched from Firestore — per-source states, never a whole-turn error */
+  'tafsirFetch.loading': 'جارٍ جلب نص التفسير…',
+  'tafsirFetch.offline': 'يتطلب تحميل هذا التفسير اتصالًا بالإنترنت.',
+  'tafsirFetch.timeout': 'انتهت مهلة جلب التفسير. حاول مرة أخرى.',
+  'tafsirFetch.error': 'تعذّر جلب هذا التفسير الآن.',
+  'tafsirFetch.permissionDenied': 'لا تملك صلاحية الوصول إلى هذه البيانات.',
+  'tafsirFetch.unavailable': 'خدمة التفاسير غير مهيأة على هذا الجهاز.',
+  'tafsirFetch.fromCache': 'من الذاكرة',
+  'tafsirFetch.notInSource':
+    'لم أجد نصًا مطابقًا في هذا التفسير لهذه الآية ضمن بيانات التطبيق.',
+
   'states.close': 'إغلاق',
 } as const;
 
@@ -942,6 +953,16 @@ export const EN: Record<TranslationKey, string> = {
   'hadith.timeout': 'The request timed out',
   'hadith.connectionFailed': 'Could not reach the Dorar server',
   'hadith.invalidResponse': 'Invalid response from the server',
+
+  'tafsirFetch.loading': 'Fetching the tafsir text…',
+  'tafsirFetch.offline': 'Loading this tafsir needs an internet connection.',
+  'tafsirFetch.timeout': 'Fetching the tafsir timed out. Please try again.',
+  'tafsirFetch.error': 'Could not fetch this tafsir right now.',
+  'tafsirFetch.permissionDenied': 'You do not have permission to access this data.',
+  'tafsirFetch.unavailable': 'The tafsir service is not configured on this device.',
+  'tafsirFetch.fromCache': 'From cache',
+  'tafsirFetch.notInSource':
+    'I found no matching passage in this tafsir for this verse within the app data.',
 
   'states.close': 'Close',
 };

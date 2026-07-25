@@ -15,7 +15,8 @@ import { FONT } from '../src/theme/fonts';
 import { useTheme } from '../src/theme/ThemeContext';
 import { LAYOUT } from '../src/theme/tokens';
 import type { TafseerGroup } from '../src/types/data.types';
-import { loadTafseerData } from '../src/utils/dataLoader';
+import { fetchPassages } from '../src/services/tafsirRemote';
+import { contentIdsFor } from '../src/utils/tafsir/tafsirSearch';
 import { formatNumber, stripSurahPrefix } from '../src/utils/numerals';
 import { getAyah, getSurahMeta } from '../src/utils/quranDataLoader';
 
@@ -48,11 +49,57 @@ export default function TafsirScreen() {
   const [source, setSource] = useState('saadi');
   const [open, setOpen] = useState<Record<string, boolean>>({ related: true });
 
+  /**
+   * Fetch ONLY this ayah's passage.
+   *
+   * This screen used to load all 6,236 As-Sa'di records into React state to
+   * display one verse. The corpus now lives in Firestore, so it resolves the
+   * single content document from the bundled manifest and fetches just that —
+   * and the request is cancelled if the user navigates away mid-flight.
+   */
   useEffect(() => {
-    loadTafseerData()
-      .then(setGroups)
-      .catch(() => setGroups([]));
-  }, []);
+    const controller = new AbortController();
+    let alive = true;
+
+    const ids = contentIdsFor(['al_saadi'], surahNumber, ayahNumber, ayahNumber);
+    if (ids.length === 0) {
+      setGroups([]);
+      return () => controller.abort();
+    }
+
+    fetchPassages(ids, controller.signal)
+      .then(({ passages }) => {
+        if (!alive) return;
+        const text = passages.get(ids[0]);
+        if (!text) {
+          setGroups([]);
+          return;
+        }
+        setGroups([
+          {
+            source: 'al_saadi',
+            surah: surahNumber,
+            surah_name: surahName,
+            surah_transliteration: getSurahMeta(surahNumber)?.nameEnglish ?? '',
+            surah_type: '',
+            ayah_start: ayahNumber,
+            ayah_end: ayahNumber,
+            ayahs: [{ number: ayahNumber, text: verse?.textUthmani ?? '' }],
+            ayah_text: verse?.textUthmani ?? '',
+            explanation: text,
+          },
+        ]);
+      })
+      .catch(() => {
+        if (alive) setGroups([]);
+      });
+
+    return () => {
+      alive = false;
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [surahNumber, ayahNumber]);
 
   const verse = getAyah(surahNumber, ayahNumber);
   const surahName = stripSurahPrefix(

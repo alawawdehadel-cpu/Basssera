@@ -104,7 +104,12 @@ function buildTafsirGroups(matches: TafsirSearchMatch[]): TafsirSourceGroup[] {
 
     if (m.notFound) {
       // Only "missing" if the source contributed no real passage at all.
-      if (group.passages.length === 0) group.notFound = true;
+      if (group.passages.length === 0) {
+        group.notFound = true;
+        // Carry WHY it is missing, so the card can distinguish "this source has
+        // no passage here" from "we could not load it".
+        if (m.unavailable) group.unavailable = true;
+      }
       continue;
     }
 
@@ -113,6 +118,7 @@ function buildTafsirGroups(matches: TafsirSearchMatch[]): TafsirSourceGroup[] {
     seen.add(key);
 
     group.notFound = false;
+    group.unavailable = false;
     group.surahName = m.surahName;
     group.passages.push({
       source: m.source,

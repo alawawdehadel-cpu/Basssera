@@ -1,0 +1,167 @@
+rules_version = '2';
+
+// بصيرة (Baseera) — Firestore security rules.
+//
+// Two kinds of data live here:
+//   1. Tafsir corpus — public, read-only, written ONLY by the Admin SDK import
+//      script (which bypasses these rules entirely). No client may ever write it.
+//   2. User data — private to one authenticated user, never readable by anyone
+//      else, and never writable at a path whose uid does not match the caller.
+//
+// There is deliberately no `allow read, write: if true` anywhere, at any stage.
+// The default-deny at the bottom means a collection nobody wrote a rule for is
+// closed rather than open.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* ---------------------------------------------------------------- */
+    /* Helpers                                                          */
+    /* ---------------------------------------------------------------- */
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // The uid in the PATH must equal the caller's uid. Never trust a uid that
+    // arrives in the document body.
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    // Server-controlled identity fields may never be changed by a client once
+    // set — otherwise a user could rewrite `uid` and impersonate another path.
+    function ownershipUnchanged(userId) {
+      return !incoming().diff(resource.data).affectedKeys().hasAny(['uid', 'createdAt'])
+             || (incoming().uid == userId && incoming().createdAt == resource.data.createdAt);
+    }
+
+    function isValidTimestamp(field) {
+      return !(field in incoming()) || incoming()[field] is timestamp;
+    }
+
+    function isSurah(n) {
+      return n is int && n >= 1 && n <= 114;
+    }
+
+    function isAyah(n) {
+      return n is int && n >= 1 && n <= 286;   // 286 = longest surah (al-Baqarah)
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* 1. Tafsir corpus — public read, no client writes, ever            */
+    /* ---------------------------------------------------------------- */
+
+    // Content-addressed passages: tafsir_content/{source}__{sha256_20}
+    match /tafsir_content/{contentId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Optional server-side override of the bundled ayah->content manifest.
+    match /tafsir_index/{sourceId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Corpus version marker.
+    match /tafsir_meta/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* 2. User data — strictly owner-scoped                              */
+    /* ---------------------------------------------------------------- */
+
+    match /users/{userId} {
+
+      allow get, list: if isOwner(userId);
+
+      // On create the body's uid must match the path; there is no other way to
+      // create a profile, so a client cannot seed someone else's document.
+      allow create: if isOwner(userId)
+                    && incoming().uid == userId
+                    && incoming().keys().hasAll(['uid'])
+                    && isValidTimestamp('createdAt')
+                    && isValidTimestamp('updatedAt');
+
+      allow update: if isOwner(userId)
+                    && ownershipUnchanged(userId)
+                    && isValidTimestamp('updatedAt');
+
+      // Account deletion is an account-level operation, not a client document
+      // write. Deleting the profile while subcollections remain would orphan
+      // them silently.
+      allow delete: if false;
+
+      /* -------------------------------------------------------------- */
+
+      match /bookmarks/{bookmarkId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+                              && isSurah(incoming().surahNumber)
+                              && isAyah(incoming().ayahNumber)
+                              && (!('note' in incoming())
+                                  || incoming().note == null
+                                  || (incoming().note is string && incoming().note.size() <= 2000));
+      }
+
+      match /readingProgress/{docId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+                              && isSurah(incoming().surahNumber)
+                              && isAyah(incoming().ayahNumber);
+      }
+
+      match /settings/{docId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+                              && (!('preferredTafsir' in incoming())
+                                  || incoming().preferredTafsir in
+                                     ['all', 'al_saadi', 'ibn_kathir', 'al_tabari'])
+                              && (!('language' in incoming())
+                                  || incoming().language in ['ar', 'en'])
+                              && (!('theme' in incoming())
+                                  || incoming().theme in ['system', 'light', 'dark'])
+                              && (!('fontSize' in incoming())
+                                  || (incoming().fontSize is number
+                                      && incoming().fontSize >= 18
+                                      && incoming().fontSize <= 40));
+      }
+
+      match /conversations/{conversationId} {
+        allow read, create, update, delete: if isOwner(userId);
+
+        match /messages/{messageId} {
+          allow read, delete: if isOwner(userId);
+          allow create, update: if isOwner(userId)
+                                && incoming().role in ['user', 'assistant']
+                                && incoming().text is string
+                                // Messages store tafsir REFERENCES, not the
+                                // tafsir text. This cap keeps a client from
+                                // mirroring the corpus into user storage.
+                                && incoming().text.size() <= 10000;
+        }
+      }
+
+      // Anything else under a user's path stays owner-only rather than
+      // falling through to the default deny with a confusing error.
+      match /{document=**} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* 3. Default deny                                                   */
+    /* ---------------------------------------------------------------- */
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

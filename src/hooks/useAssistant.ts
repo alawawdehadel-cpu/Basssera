@@ -7,10 +7,24 @@ import { buildChatAnswer } from '../utils/answerBuilder';
 import { searchAnswer } from '../utils/chatbotSearch';
 import type { TafsirConversationContext } from '../utils/tafsir/tafsirQuestionAnalyzer';
 import type { TafsirSourceId } from '../types/data.types';
-import { loadTafseerData } from '../utils/dataLoader';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetchPassages, type FetchOutcome } from '../services/tafsirRemote';
+import { setTafsirKvStore } from '../services/tafsirCache';
+import { planTafsirPassage } from '../utils/tafsir/tafsirPlan';
+import { contentIdsFor } from '../utils/tafsir/tafsirSearch';
+import { isTafsirSourceId } from '../utils/tafsirSources';
 import { ASSISTANT_HADITH_COUNT, buildHadithQuery, shouldSearchHadith } from '../utils/hadithQuery';
 import { detectIntent } from '../utils/intentDetector';
 import { sanitizeInput } from '../utils/inputSanitizer';
+
+/**
+ * Give the tafsir cache its real storage backend.
+ *
+ * Done here rather than inside tafsirCache.ts because that module is loaded by
+ * the offline test harness in bare Node, where AsyncStorage does not exist.
+ * This hook is only ever imported by the app, so the import is safe here.
+ */
+setTafsirKvStore(AsyncStorage);
 
 /**
  * Drives the "اسأل بصيرة" assistant flow used by the design (screens
@@ -126,7 +140,7 @@ export function useAssistant() {
       setThinking(true);
       const startedAt = Date.now();
 
-      // --- local answer (bundled data, no network) -------------------------
+      // --- the answer ------------------------------------------------------
       // A hadith request is searched locally by its TOPIC, not its raw
       // wording: «حديث عن بر الوالدين» run verbatim matches the word
       // «الحديث» in لهو الحديث and answers with تفسير لقمان ٦ — about idle
@@ -134,12 +148,52 @@ export function useAssistant() {
       // tafsir the user actually meant. Every other intent is untouched.
       const localQuery = hadithLed && hadithQuery ? hadithQuery : question;
 
-      loadTafseerData()
-        .catch(() => null)
-        .then((groups) => {
-          const result = searchAnswer(localQuery, groups, 'ar', {
+      // The plan MUST be computed on localQuery, not on `question`: for a
+      // hadith-led turn they differ, and planning the wrong one would fetch
+      // passages for a question we are not going to answer.
+      const plan = planTafsirPassage(localQuery, detectIntent(localQuery).intent, {
+        selectedSources,
+        conversationContext: tafsirContext.current,
+      });
+
+      // Tafsir text is no longer bundled. Resolve which content documents this
+      // answer needs — offline, from the bundled manifest, at zero read cost —
+      // then fetch just those.
+      const contentIds =
+        plan.kind === 'retrieve'
+          ? contentIdsFor(plan.sources, plan.surahNumber, plan.ayahStart, plan.ayahEnd)
+          : [];
+
+      const tafsirController = new AbortController();
+      inFlight.current.add(tafsirController);
+
+      const prefetch: Promise<FetchOutcome> =
+        contentIds.length > 0
+          ? fetchPassages(contentIds, tafsirController.signal)
+          : Promise.resolve({ passages: new Map(), unresolved: [], fromCache: false });
+
+      prefetch
+        .then((remote) => {
+          if (tafsirController.signal.aborted) return;
+
+          // A content id is `{source}__{hash}`, so an unresolved id names the
+          // source that could not be read. That distinction matters: the
+          // bundled manifest already told us the passage EXISTS, so this is a
+          // fetch failure, not an absence, and the UI must say so.
+          const unavailableSources = [
+            ...new Set(
+              remote.unresolved
+                .map((cid) => cid.slice(0, cid.indexOf('__')))
+                .filter((s): s is TafsirSourceId => isTafsirSourceId(s)),
+            ),
+          ];
+
+          const result = searchAnswer(localQuery, [], 'ar', {
             selectedSources,
             conversationContext: tafsirContext.current,
+            plan,
+            prefetchedMatches: remote.passages,
+            unavailableSources,
           });
           // Remember only this turn's reference context (never tafsir text)
           // so the next message can be a follow-up. A non-tafsir answer
@@ -151,6 +205,9 @@ export function useAssistant() {
             setThinking(false);
             patch(id, { answer });
           }, remaining);
+        })
+        .finally(() => {
+          inFlight.current.delete(tafsirController);
         });
 
       // --- related hadith, in parallel -------------------------------------

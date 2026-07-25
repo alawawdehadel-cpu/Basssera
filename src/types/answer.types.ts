@@ -82,6 +82,12 @@ export interface TafsirSourceGroup {
   surahName: string;
   passages: TafsirDisplayItem[];
   notFound?: boolean;
+  /**
+   * The passage exists but could not be fetched (offline / timeout / backend
+   * not configured). Kept separate from `notFound` so the card never tells the
+   * reader a passage is absent when it is merely unreachable.
+   */
+  unavailable?: boolean;
 }
 
 /**

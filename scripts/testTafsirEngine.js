@@ -39,6 +39,8 @@ const { buildChatAnswer } = require('../src/utils/answerBuilder.ts');
 const { detectIntent } = require('../src/utils/intentDetector.ts');
 const { loadTafseerData } = require('../src/utils/dataLoader.ts');
 const { resolveRequestedTafsirSources } = require('../src/utils/tafsirSources.ts');
+const { planTafsirPassage } = require('../src/utils/tafsir/tafsirPlan.ts');
+const { contentIdsFor } = require('../src/utils/tafsir/tafsirSearch.ts');
 
 let passed = 0;
 let failed = 0;
@@ -55,6 +57,45 @@ function setEq(a, b) {
   const sa = new Set(a);
   const sb = new Set(b);
   return sa.size === sb.size && [...sa].every((x) => sb.has(x));
+}
+
+/* ------------------------------------------------------------------ */
+/* Remote-passage injection                                            */
+/*                                                                     */
+/* Tafsir text is no longer bundled: useAssistant resolves a plan,      */
+/* fetches the passages it names, and injects them into searchAnswer.   */
+/* These helpers reproduce that here with SYNTHETIC text.               */
+/*                                                                     */
+/* Synthetic on purpose. That the real corpus round-trips byte-for-byte */
+/* is proved separately, over all 18,708 records, by                    */
+/*   node scripts/firebase/importTafsir.mjs --self-check                */
+/* What this harness must prove is the PLUMBING: that the right source  */
+/* gets the right text, that ordering and grouping hold, and above all  */
+/* that one scholar's words never appear under another's name. Tagging  */
+/* each fixture with its own source id makes that violation visible.    */
+/* ------------------------------------------------------------------ */
+
+function planFor(query, opts) {
+  return planTafsirPassage(query, detectIntent(query).intent, opts);
+}
+
+/** Synthetic passage text for every content id the plan needs. */
+function injectionFor(query, opts) {
+  const plan = planFor(query, opts);
+  if (plan.kind !== 'retrieve') return { plan, prefetchedMatches: new Map() };
+  const ids = contentIdsFor(plan.sources, plan.surahNumber, plan.ayahStart, plan.ayahEnd);
+  // Long enough (>601 chars) to exercise the excerpt/truncation path, and
+  // tagged with the source id so a card showing another scholar's text fails.
+  const filler = 'ثم بيّن المفسّر معنى الآية وما تضمنته من الهدى والبيان. '.repeat(14);
+  const prefetchedMatches = new Map(
+    ids.map((id) => [id, `«${id.split('__')[0]}» نص تفسيري للاختبار (${id.slice(-6)}). ${filler}`]),
+  );
+  return { plan, prefetchedMatches };
+}
+
+/** searchAnswer with the passages this question needs already injected. */
+function answerWithPassages(query, opts) {
+  return searchAnswer(query, [], 'ar', { ...opts, ...injectionFor(query, opts) });
 }
 
 async function main() {
@@ -178,20 +219,24 @@ async function main() {
 
   // 12b) with real data, a specific source returns THAT source's real text.
   {
-    const r = searchAnswer('ما تفسير الآية 1 من سورة الإخلاص؟', saadi, 'ar', {
-      selectedSources: ['al_tabari'],
-    });
-    console.log('١٢ب) نص حقيقي من المصدر المطلوب');
+    const q = 'ما تفسير الآية 1 من سورة الإخلاص؟';
+    const r = answerWithPassages(q, { selectedSources: ['al_tabari'] });
+    console.log('١٢ب) نص المصدر المطلوب يصل كما هو');
     const m = (r.tafsirMatches || [])[0];
     check('card source is al_tabari', !!m && m.source === 'al_tabari', m && m.source);
-    check('card has verbatim tafsir text', !!m && !m.notFound && m.explanation.length > 0);
+    check('card carries the fetched text', !!m && !m.notFound && m.explanation.length > 0);
+    check(
+      'text belongs to al_tabari, not another source',
+      !!m && m.explanation.includes('al_tabari'),
+      m && m.explanation.slice(0, 40),
+    );
   }
 
   // ---- display layer (buildChatAnswer → grouped source cards) ----
 
   // 13) الجميع → three grouped cards in fixed order, one passage each
   {
-    const r = searchAnswer('ما تفسير الآية 255 من سورة البقرة؟', saadi, 'ar', {
+    const r = answerWithPassages('ما تفسير الآية 255 من سورة البقرة؟', {
       selectedSources: ['al_tabari', 'ibn_kathir', 'al_saadi'], // deliberately unordered
     });
     const a = buildChatAnswer(r, 'ar');
@@ -206,7 +251,7 @@ async function main() {
 
   // 14) excerpt is word-safe, bounded, and marks truncation
   {
-    const r = searchAnswer('ما تفسير الآية 255 من سورة البقرة؟', saadi, 'ar', {
+    const r = answerWithPassages('ما تفسير الآية 255 من سورة البقرة؟', {
       selectedSources: ['ibn_kathir'],
     });
     const a = buildChatAnswer(r, 'ar');
@@ -220,7 +265,7 @@ async function main() {
 
   // 15) ayah range → multiple passages under ONE source card, ayah-sorted
   {
-    const r = searchAnswer('ما تفسير الآيات من 1 إلى 5 من سورة الفاتحة؟', saadi, 'ar', {
+    const r = answerWithPassages('ما تفسير الآيات من 1 إلى 5 من سورة الفاتحة؟', {
       selectedSources: ['al_saadi'],
     });
     const a = buildChatAnswer(r, 'ar');
@@ -259,16 +304,16 @@ async function main() {
   {
     console.log('١٨) شرح المساعد مبني على المصادر المعروضة فقط');
     // single source
-    const rS = buildChatAnswer(searchAnswer('ما تفسير السعدي لآية الكرسي؟', saadi, 'ar', { selectedSources: ['al_saadi', 'ibn_kathir', 'al_tabari'] }), 'ar');
+    const rS = buildChatAnswer(answerWithPassages('ما تفسير السعدي لآية الكرسي؟', { selectedSources: ['al_saadi', 'ibn_kathir', 'al_tabari'] }), 'ar');
     check('single-source explanation present', !!rS.assistantExplanation);
     check('based on al_saadi only', setEq(rS.assistantExplanation.basedOnSources, ['al_saadi']), (rS.assistantExplanation.basedOnSources || []).join(','));
     check('flagged extractive (not AI)', rS.assistantExplanation.extractive === true);
     check('title = شرح المساعد', rS.assistantExplanation.title === 'شرح المساعد');
     // all three
-    const rAll = buildChatAnswer(searchAnswer('ما تفسير آية الكرسي؟', saadi, 'ar', { selectedSources: ['al_saadi', 'ibn_kathir', 'al_tabari'] }), 'ar');
+    const rAll = buildChatAnswer(answerWithPassages('ما تفسير آية الكرسي؟', { selectedSources: ['al_saadi', 'ibn_kathir', 'al_tabari'] }), 'ar');
     check('all-source explanation based on three', setEq(rAll.assistantExplanation.basedOnSources, ['al_saadi', 'ibn_kathir', 'al_tabari']));
     // comparison of two
-    const rCmp = buildChatAnswer(searchAnswer('قارن بين السعدي وابن كثير في الفاتحة', saadi, 'ar'), 'ar');
+    const rCmp = buildChatAnswer(answerWithPassages('قارن بين السعدي وابن كثير في الفاتحة'), 'ar');
     check('comparison explanation based on the two named', setEq(rCmp.assistantExplanation.basedOnSources, ['al_saadi', 'ibn_kathir']), (rCmp.assistantExplanation.basedOnSources || []).join(','));
   }
 

@@ -105,6 +105,16 @@ export interface TafsirSearchMatch {
    * text in its place.
    */
   notFound?: boolean;
+  /**
+   * True when this source DOES have a passage for the ayah (the bundled
+   * manifest says so) but its text could not be fetched — offline, timeout, or
+   * Firebase not configured.
+   *
+   * Distinct from `notFound` on purpose. Telling a reader that a passage does
+   * not exist, when in fact we merely failed to load it, is a false statement
+   * about a scholar's work. The UI must say "could not load", not "not found".
+   */
+  unavailable?: boolean;
 }
 
 /** Typed load failure so one bad/missing source never crashes the assistant. */

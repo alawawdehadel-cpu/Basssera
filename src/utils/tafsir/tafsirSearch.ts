@@ -3,63 +3,78 @@ import type {
   TafsirSearchMatch,
   TafsirSourceId,
 } from '../../types/data.types';
-import { didSourceFailSync, getSourceGroupsSync } from '../dataLoader';
+import { getAyah, getSurahMeta } from '../quranDataLoader';
 import { sourceArabicName } from '../tafsirSources';
+import { passagesFor } from './tafsirManifest';
 import type { TafsirQuestionAnalysis } from './tafsirQuestionAnalyzer';
 
 /**
  * ============================================================
  *  Source-aware tafsir retrieval.
  *
- *  Builds and caches ONE index per source (surah → its groups), so a
- *  question never re-walks a whole dataset and adding a second/third source
- *  never rebuilds the others' indexes. Retrieval is exact and deterministic:
- *  it returns the tafsir group(s) whose ayah range overlaps the requested
- *  ayah/range, per source, and an honest "not found" marker for any
- *  requested source that has no matching passage — never another source's
- *  text in its place.
+ *  The tafsir TEXT now lives in Firestore, so this module no longer walks a
+ *  bundled dataset. It resolves an ayah reference to content-document ids via
+ *  the bundled manifest (offline, zero reads) and reads the text out of the
+ *  passages the caller pre-fetched.
+ *
+ *  Deliberately still SYNCHRONOUS. Only one of searchAnswer()'s eight return
+ *  paths touches remote data; making the whole engine async to serve it would
+ *  ripple through useAssistant, useChat and every call site in
+ *  scripts/testTafsirEngine.js — and would pull the network layer into a module
+ *  graph that bare Node must be able to load, which would end the only test
+ *  harness this project has. useAssistant does the awaiting and injects the
+ *  result instead.
+ *
+ *  The invariant that matters most is preserved by construction: a requested
+ *  source that has no text yields its OWN "not found" marker and is never
+ *  filled in with another scholar's words.
  * ============================================================
  */
 
-/** surah number → groups of that surah (for one source). */
-type SurahIndex = Map<number, TafseerGroup[]>;
-
-const indexCache = new Map<TafsirSourceId, SurahIndex>();
-
-function sourceIndex(source: TafsirSourceId): SurahIndex {
-  const cached = indexCache.get(source);
-  if (cached) return cached;
-
-  const bySurah: SurahIndex = new Map();
-  for (const g of getSourceGroupsSync(source)) {
-    const list = bySurah.get(g.surah);
-    if (list) list.push(g);
-    else bySurah.set(g.surah, [g]);
-  }
-  // Keep each surah's groups in ayah order for stable, sorted output.
-  for (const list of bySurah.values()) {
-    list.sort((a, b) => a.ayah_start - b.ayah_start);
-  }
-  indexCache.set(source, bySurah);
-  return bySurah;
+/** Passage text for this turn, keyed by content-document id. */
+export interface TafsirInjection {
+  passages?: Map<string, string>;
+  /** Sources whose fetch failed with nothing cached. */
+  unavailableSources?: TafsirSourceId[];
 }
 
 function rangeLabel(start: number, end: number): string {
   return start === end ? `${start}` : `${start}–${end}`;
 }
 
-function toMatch(source: TafsirSourceId, g: TafseerGroup): TafsirSearchMatch {
+/**
+ * Surah/ayah display data comes from the verified mushaf rather than from the
+ * tafsir record, which is no longer local. quran.json is the same source
+ * quranDataLoader already serves to the reader.
+ */
+function surahNameOf(surah: number): string {
+  const meta = getSurahMeta(surah);
+  if (!meta) return `سورة ${surah}`;
+  return meta.nameArabic.replace(/^سُورَةُ?\s+/, '').replace(/^سورة\s+/, '').trim();
+}
+
+function ayahTextOf(surah: number, ayah: number): string {
+  return getAyah(surah, ayah)?.textUthmani ?? '';
+}
+
+function toMatch(
+  source: TafsirSourceId,
+  surah: number,
+  ayahStart: number,
+  ayahEnd: number,
+  explanation: string,
+): TafsirSearchMatch {
   return {
     source,
     sourceArabic: sourceArabicName(source),
-    surahNumber: g.surah,
-    surahName: g.surah_name,
-    surahTransliteration: g.surah_transliteration,
-    ayahRange: rangeLabel(g.ayah_start, g.ayah_end),
-    ayahStart: g.ayah_start,
-    ayahEnd: g.ayah_end,
-    ayahText: g.ayah_text,
-    explanation: g.explanation,
+    surahNumber: surah,
+    surahName: surahNameOf(surah),
+    surahTransliteration: getSurahMeta(surah)?.nameEnglish ?? '',
+    ayahRange: rangeLabel(ayahStart, ayahEnd),
+    ayahStart,
+    ayahEnd,
+    ayahText: ayahTextOf(surah, ayahStart),
+    explanation,
   };
 }
 
@@ -70,53 +85,48 @@ function notFoundMatch(
   surahName: string | null,
   start: number | null,
   end: number | null,
+  unavailable = false,
 ): TafsirSearchMatch {
   return {
     source,
     sourceArabic: sourceArabicName(source),
     surahNumber: surah,
-    surahName: surahName ?? `سورة ${surah}`,
+    surahName: surahName ?? surahNameOf(surah),
     surahTransliteration: '',
     ayahRange: start !== null ? rangeLabel(start, end ?? start) : '',
     ayahStart: start ?? 0,
     ayahEnd: end ?? start ?? 0,
-    ayahText: '',
+    ayahText: start !== null ? ayahTextOf(surah, start) : '',
     explanation: '',
     notFound: true,
+    ...(unavailable ? { unavailable: true } : {}),
   };
-}
-
-/** Groups of `surah` in one source that overlap [start,end] (or the first, whole-surah). */
-function groupsForRange(
-  source: TafsirSourceId,
-  surah: number,
-  start: number | null,
-  end: number | null,
-): TafseerGroup[] {
-  const list = sourceIndex(source).get(surah);
-  if (!list || list.length === 0) return [];
-  if (start === null) return [list[0]]; // whole-surah request → first passage
-  const lo = start;
-  const hi = end ?? start;
-  const overlapping = list.filter((g) => g.ayah_start <= hi && g.ayah_end >= lo);
-  return overlapping;
 }
 
 export interface TafsirRetrieval {
   matches: TafsirSearchMatch[];
-  /** Sources that were requested but failed to LOAD (not merely no-match). */
+  /**
+   * Sources that were requested and DO have a passage for this ayah, but whose
+   * text could not be fetched. Distinct from "this source has nothing here",
+   * which is a real answer rather than a failure. The bundled manifest is what
+   * makes that distinction possible while offline.
+   */
   failedSources: TafsirSourceId[];
-  /** True when every requested source came back empty/not-found. */
+  /** True when no requested source produced any text. */
   allMissing: boolean;
 }
 
 /**
  * Retrieves per-source tafsir passages for a resolved analysis.
- * @param sources  the sources to search, in display order (already resolved)
+ *
+ * @param sources   sources to retrieve, already resolved and ordered
+ * @param analysis  the resolved reference
+ * @param injected  passages fetched for this turn (see useAssistant)
  */
 export function retrieveTafsirMatches(
   sources: TafsirSourceId[],
   analysis: TafsirQuestionAnalysis,
+  injected?: TafsirInjection,
 ): TafsirRetrieval {
   const { surahNumber, surahName, ayahStart, ayahEnd } = analysis;
   const matches: TafsirSearchMatch[] = [];
@@ -126,19 +136,44 @@ export function retrieveTafsirMatches(
     return { matches: [], failedSources, allMissing: true };
   }
 
+  const passages = injected?.passages;
+  const unavailable = new Set(injected?.unavailableSources ?? []);
   let anyFound = false;
+
   for (const source of sources) {
-    const groups = groupsForRange(source, surahNumber, ayahStart, ayahEnd);
-    if (groups.length > 0) {
-      anyFound = true;
-      for (const g of groups) matches.push(toMatch(source, g));
-    } else {
-      if (didSourceFailSync(source)) failedSources.push(source);
+    const refs = passagesFor(source, surahNumber, ayahStart, ayahEnd);
+
+    if (refs.length === 0) {
+      // The manifest says this source genuinely has nothing here. That is a
+      // real answer, and it stays correct with no network at all.
       matches.push(notFoundMatch(source, surahNumber, surahName, ayahStart, ayahEnd));
+      continue;
+    }
+
+    const resolved = refs
+      .map((ref) => ({ ref, text: passages?.get(ref.contentId) }))
+      .filter((r): r is { ref: (typeof refs)[number]; text: string } => !!r.text);
+
+    if (resolved.length === 0) {
+      // The manifest says this source HAS a passage here, so failing to read it
+      // is a fetch failure, not an absence. Flagged on the match itself so the
+      // card can say "could not load" instead of falsely claiming the passage
+      // does not exist.
+      const couldNotFetch = unavailable.has(source) || !passages;
+      if (couldNotFetch) failedSources.push(source);
+      matches.push(
+        notFoundMatch(source, surahNumber, surahName, ayahStart, ayahEnd, couldNotFetch),
+      );
+      continue;
+    }
+
+    anyFound = true;
+    for (const { ref, text } of resolved) {
+      matches.push(toMatch(source, surahNumber, ref.ayahStart, ref.ayahEnd, text));
     }
   }
 
-  // Stable ordering: by source (request order), then surah, then ayah start.
+  // Stable ordering: request order, then surah, then ayah.
   const order = new Map(sources.map((s, i) => [s, i] as const));
   matches.sort((a, b) => {
     const so = (order.get(a.source) ?? 0) - (order.get(b.source) ?? 0);
@@ -150,7 +185,46 @@ export function retrieveTafsirMatches(
   return { matches, failedSources, allMissing: !anyFound };
 }
 
-/** Clears cached indexes (used by tests to isolate runs). */
-export function _resetTafsirSearchCache(): void {
-  indexCache.clear();
+/**
+ * Every content-document id needed to answer this reference, across sources.
+ * Used by the pre-fetch step; resolving ids costs no network and no reads.
+ */
+export function contentIdsFor(
+  sources: TafsirSourceId[],
+  surah: number,
+  ayahStart: number | null,
+  ayahEnd: number | null,
+): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const source of sources) {
+    for (const ref of passagesFor(source, surah, ayahStart, ayahEnd)) {
+      if (seen.has(ref.contentId)) continue;
+      seen.add(ref.contentId);
+      ids.push(ref.contentId);
+    }
+  }
+  return ids;
 }
+
+/** Which of `sources` have a passage for this reference, per the local manifest. */
+export function sourcesWithPassage(
+  sources: TafsirSourceId[],
+  surah: number,
+  ayahStart: number | null,
+  ayahEnd: number | null,
+): TafsirSourceId[] {
+  return sources.filter((s) => passagesFor(s, surah, ayahStart, ayahEnd).length > 0);
+}
+
+/**
+ * Kept for API compatibility with the previous bundled-dataset implementation.
+ * There is no longer a per-source index to clear; the manifest cache is reset
+ * through _resetManifestCache().
+ */
+export function _resetTafsirSearchCache(): void {
+  /* no cached dataset remains */
+}
+
+/** Unused re-export guard: TafseerGroup is still the shape used elsewhere. */
+export type { TafseerGroup };

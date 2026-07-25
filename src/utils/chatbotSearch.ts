@@ -13,16 +13,16 @@ import { detectIntent } from './intentDetector';
 import { resolveNamedAyah } from './namedAyahs';
 import type { QuestionIntent } from '../types/intent.types';
 import qaDataRaw from '../data/chatbotData.json';
-import {
-  ALL_TAFSIR_SOURCE_IDS,
-  resolveRequestedTafsirSources,
-  sourceArabicName,
-} from './tafsirSources';
-import {
-  analyzeTafsirQuestion,
-  type TafsirConversationContext,
-  type TafsirQuestionAnalysis,
+import { sourceArabicName } from './tafsirSources';
+import type {
+  TafsirConversationContext,
+  TafsirQuestionAnalysis,
 } from './tafsir/tafsirQuestionAnalyzer';
+import {
+  buildTafsirContext,
+  planTafsirPassage,
+  type TafsirPlan,
+} from './tafsir/tafsirPlan';
 import { retrieveTafsirMatches } from './tafsir/tafsirSearch';
 
 /**
@@ -77,6 +77,26 @@ export interface TafsirSearchOptions {
   compare?: boolean;
   /** Previous-turn context, enabling follow-up questions. */
   conversationContext?: TafsirConversationContext | null;
+
+  /* ---- remote-passage injection (see src/utils/tafsir/tafsirPlan.ts) ---- */
+
+  /**
+   * The plan the caller already computed. Passing it — rather than letting
+   * this module recompute one — is what guarantees the passages that were
+   * fetched belong to the question being answered.
+   */
+  plan?: TafsirPlan;
+  /**
+   * Passage text fetched remotely for this turn, keyed by content-document id.
+   * Tafsir text is no longer bundled, so this is the normal path.
+   */
+  prefetchedMatches?: Map<string, string>;
+  /**
+   * Sources whose passages could not be fetched AND were not cached. These
+   * render an honest per-source notice; the sources that did resolve still
+   * render their text.
+   */
+  unavailableSources?: TafsirSourceId[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -517,44 +537,6 @@ function routeByIntent(
 const NO_PASSAGE_AR =
   'لم أجد نصًا مطابقًا في التفسير المحدد داخل بيانات التطبيق.';
 
-/** Concrete "tafsir passage" intents the multi-source engine can answer. */
-const TAFSIR_PASSAGE_INTENTS = new Set<TafsirQuestionAnalysis['intent']>([
-  'exact_ayah',
-  'ayah_range',
-  'named_ayah',
-  'quran_phrase',
-  'compare_tafsir',
-  'surah_tafsir',
-  'follow_up',
-]);
-
-/** Resolve the sources to search: question-named > all > UI-selected > all three. */
-function resolveSources(
-  analysis: TafsirQuestionAnalysis,
-  options: TafsirSearchOptions | undefined,
-): TafsirSourceId[] {
-  return resolveRequestedTafsirSources({
-    explicitlyRequestedSources: analysis.requestedSources,
-    asksForAllSources: analysis.asksForAllSources,
-    uiSelectedSources: options?.selectedSources,
-  });
-}
-
-function buildContext(
-  analysis: TafsirQuestionAnalysis,
-  sources: TafsirSourceId[],
-  comparison: boolean,
-): TafsirConversationContext {
-  return {
-    lastSurahNumber: analysis.surahNumber,
-    lastSurahName: analysis.surahName,
-    lastAyahStart: analysis.ayahStart,
-    lastAyahEnd: analysis.ayahEnd,
-    lastSources: sources,
-    lastWasComparison: comparison,
-  };
-}
-
 /**
  * Handles a tafsir-passage question across the selected source(s). Returns
  * null when the question is NOT a concrete tafsir-passage request (so the
@@ -568,49 +550,28 @@ function handleMultiSourceTafsir(
   lang: AppLanguage,
   options: TafsirSearchOptions | undefined,
 ): SearchResult | null {
-  // Only tafsir-shaped questions (or ones that explicitly name a source /
-  // ask to compare) may enter this branch.
-  const tafsirShaped =
-    detectedIntent === 'TAFSIR_EXPLANATION' || detectedIntent === 'GENERAL_TAFSIR_SEARCH';
+  // The gate lives in tafsirPlan.ts so that the code which PRE-FETCHES
+  // passages over the network and this code, which answers from them, make
+  // one identical decision. Reuse the caller's plan when it supplied one.
+  const plan =
+    options?.plan ??
+    planTafsirPassage(rawQuery, detectedIntent, {
+      selectedSources: options?.selectedSources,
+      compare: options?.compare,
+      conversationContext: options?.conversationContext,
+    });
 
-  const analysis = analyzeTafsirQuestion(rawQuery, options?.conversationContext ?? null);
-
-  const explicit =
-    analysis.requestedSources.length > 0 ||
-    analysis.compareSources ||
-    !!analysis.namedAyah ||
-    !!analysis.quotedPhrase;
-
-  if (!tafsirShaped && !explicit) return null;
-  if (!TAFSIR_PASSAGE_INTENTS.has(analysis.intent)) return null;
-
-  // Clarifications the analyzer already decided on (missing surah, ambiguous
-  // phrase / named ayah). Only the missing-surah case is gated on an explicit
-  // tafsir trigger, so a stray number elsewhere never forces a prompt.
-  if (analysis.needsClarification) {
-    if (analysis.clarificationReason === 'missing_surah' && detectedIntent !== 'TAFSIR_EXPLANATION') {
-      return null;
-    }
-    return { kind: 'clarify', answer: clarifyText(analysis, lang) };
+  if (plan.kind === 'skip') return null;
+  if (plan.kind === 'clarify') {
+    return { kind: 'clarify', answer: clarifyText(plan.analysis, lang) };
   }
 
-  // A whole-surah tafsir with no explicit tafsir trigger / source / compare
-  // is left to the existing pipeline (preserves «افتح سورة …» behavior).
-  if (
-    analysis.intent === 'surah_tafsir' &&
-    detectedIntent !== 'TAFSIR_EXPLANATION' &&
-    !explicit
-  ) {
-    return null;
-  }
+  const { analysis, sources, comparison } = plan;
 
-  if (analysis.surahNumber === null) return null;
-
-  const comparison = analysis.compareSources || options?.compare === true;
-  let sources = resolveSources(analysis, options);
-  if (comparison && sources.length < 2) sources = [...ALL_TAFSIR_SOURCE_IDS];
-
-  const { matches, failedSources, allMissing } = retrieveTafsirMatches(sources, analysis);
+  const { matches, failedSources, allMissing } = retrieveTafsirMatches(sources, analysis, {
+    passages: options?.prefetchedMatches,
+    unavailableSources: options?.unavailableSources,
+  });
 
   const range =
     analysis.ayahStart === null
@@ -655,7 +616,7 @@ function handleMultiSourceTafsir(
     tafsirMatches: matches,
     comparison,
     matchType,
-    resolvedContext: buildContext(analysis, sources, comparison),
+    resolvedContext: buildTafsirContext(analysis, sources, comparison),
   };
 }
 

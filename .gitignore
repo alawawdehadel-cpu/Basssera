@@ -28,8 +28,32 @@ yarn-error.*
 *.pem
 
 # Local env files
-.env*.local
+.env
+.env.*
+!.env.example
 *.local
+
+# Firebase — credentials and generated artifacts.
+# The client config (EXPO_PUBLIC_FIREBASE_*) is NOT a secret; security rules are
+# the access control. These entries are for things that ARE secrets, plus local
+# emulator/CLI noise. A leaked service-account key here would need a history
+# rewrite to remove, and this repo already carries ~163 MB of JSON in history.
+serviceAccount*.json
+service-account*.json
+firebase-admin*.json
+*-firebase-adminsdk-*.json
+google-services.json
+GoogleService-Info.plist
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+database-debug.log*
+ui-debug.log*
+pubsub-debug.log*
+storage-debug.log*
+
+# Import checkpoints (resume state for scripts/firebase/importTafsir.mjs)
+.tafsir-import-*.json
 
 # Build source intermediates (not read by the app at runtime)
 /raw-quran.json
