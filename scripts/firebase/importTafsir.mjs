@@ -258,34 +258,64 @@ async function importSource(db, src) {
 
   let written = 1;
   const rest = pending.slice(1);
-  const CHUNK = 500;
 
-  for (let i = 0; i < rest.length; i += CHUNK) {
-    const slice = rest.slice(i, i + CHUNK);
-    await Promise.all(
-      slice.map(([hash, entry]) =>
-        bulk
-          .set(db.collection('tafsir_content').doc(contentDocId(src.id, hash)), {
-            t: entry.text,
-            n: entry.bytes,
-            v: SCHEMA_VERSION,
-          })
-          .then(() => {
-            done.add(hash);
-            written += 1;
-          }),
-      ),
-    );
-    await bulk.flush();
-    writeCheckpoint(src.id, done);
-    const pct = Math.round(((i + slice.length) / Math.max(rest.length, 1)) * 100);
+  // Enqueue every write, then await close() ONCE.
+  //
+  // Do NOT gate the loop on `await Promise.all(bulk.set(...))`. BulkWriter
+  // buffers internally, so those per-document promises can remain unsettled
+  // while the batch is in flight; awaiting them can leave the event loop with
+  // nothing runnable, at which point Node exits **cleanly with code 0** in the
+  // middle of the import. That bit us for real: 5,962 of 5,971 documents were
+  // written, the manifest document was never created, the checkpoint was never
+  // updated, and the script still reported success.
+  //
+  // close() is the documented way to wait for every buffered write.
+  let failed = 0;
+  const progress = setInterval(() => {
+    const pct = Math.round((written / Math.max(pending.length, 1)) * 100);
     process.stdout.write(`\r  الكتابة           ${written}/${pending.length}  (${pct}%)`);
+  }, 1000);
+
+  for (const [hash, entry] of rest) {
+    bulk
+      .set(db.collection('tafsir_content').doc(contentDocId(src.id, hash)), {
+        t: entry.text,
+        n: entry.bytes,
+        v: SCHEMA_VERSION,
+      })
+      .then(
+        () => {
+          done.add(hash);
+          written += 1;
+        },
+        (error) => {
+          failed += 1;
+          if (failed <= 3) {
+            console.error(`\n  ✗ فشلت كتابة ${hash}: ${error?.message ?? error}`);
+          }
+        },
+      );
   }
+
   await bulk.close();
-  process.stdout.write('\n');
+  clearInterval(progress);
+  process.stdout.write(
+    `\r  الكتابة           ${written}/${pending.length}  (100%)          \n`,
+  );
+
+  writeCheckpoint(src.id, done);
+
+  if (failed > 0 || written !== pending.length) {
+    console.error(
+      `\n✗ ${src.id}: كُتب ${written} من ${pending.length} (فشل ${failed}).\n` +
+        '  أعد تشغيل الأمر نفسه — الاستيراد قابل للاستئناف والمعرّفات ثابتة.',
+    );
+    process.exit(1);
+  }
 
   // Server-side manifest override (the app bundles its own copy; this exists so
-  // a corpus correction can ship without an app-store release).
+  // a corpus correction can ship without an app-store release). Written only
+  // after every passage landed, so its presence means the source is complete.
   await db.collection('tafsir_index').doc(src.id).set({
     v: SCHEMA_VERSION,
     source: src.id,
