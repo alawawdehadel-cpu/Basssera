@@ -26,8 +26,38 @@ const FATWA_TRIGGERS = [
 /** «كم عدد آيات سورة X», «هل سورة X مكية أم مدنية؟», «ما ترتيب سورة X؟», «ما السورة رقم N؟» */
 const SURAH_INFO_RE = /عدد\s*(ال)?ايات|مكيه|مدنيه|ترتيب\s*سوره|السوره\s*رقم/;
 
-/** «كم شدة …», «كم مرة ذكرت …», "how many …" — general Quran-text statistics. */
-const QURAN_STATS_RE = /(^|\s)كم(\s|$)|(^|\s)(how many|count|number of)(\s|$)/;
+/** «كم شدة …», «كم مرة ذكرت …», "how many …" — counting questions. */
+const QURAN_COUNT_RE = /(^|\s)كم(\s|$)|(^|\s)(how many|count|number of)(\s|$)/;
+
+/** «ما أطول سورة؟», «أقصر آية», «أكبر/أصغر», «أكثر/أقل» — superlatives/rankings. */
+const QURAN_SUPERLATIVE_RE =
+  /اطول|اقصر|اكبر|اصغر|اكثر|اقل|longest|shortest|largest|smallest|most|least/;
+
+/** «أول موضع/مرة …», «آخر موضع/مرة …» — first/last occurrence. */
+const QURAN_FIRST_LAST_RE =
+  /(اول|اخر)\s*(موضع|مره)|first occurrence|last occurrence|first time|last time/;
+
+/** «رتب …», «ترتيب …», "rank", "top N" — ranking requests. */
+const QURAN_RANKING_RE = /(^|\s)(رتب|ترتيب)(\s|$)|(^|\s)(rank|ranking)(\s|$)|top\s+\d+/;
+
+/**
+ * Comparison of Quran-word occurrences: «قارن بين ذكر الدنيا والآخرة»,
+ * «أيهما أكثر ذكرًا». Excluded when the query names a TAFSIR source, because
+ * «قارن بين السعدي وابن كثير» is a tafsir comparison, not a word-count one.
+ */
+const QURAN_COMPARISON_RE =
+  /قارن|مقارنه|الفرق بين|ايهما اكثر|ايهما اقل|compare|comparison|which is more|which is less/;
+const TAFSIR_SOURCE_MENTION_RE = /السعدي|ابن كثير|الطبري|تيسير الكريم|جامع البيان|(^|\s)تفسير/;
+
+/** Any analytical/statistical Quran-data question → answered by quranAnalytics. */
+function isQuranStats(q: string): boolean {
+  if (QURAN_COUNT_RE.test(q)) return true;
+  if (QURAN_SUPERLATIVE_RE.test(q)) return true;
+  if (QURAN_FIRST_LAST_RE.test(q)) return true;
+  if (QURAN_RANKING_RE.test(q)) return true;
+  if (QURAN_COMPARISON_RE.test(q) && !TAFSIR_SOURCE_MENTION_RE.test(q)) return true;
+  return false;
+}
 
 /** «أين وردت كلمة …», «اعرض الآيات التي فيها كلمة …» — always anchored on «كلمة». */
 const WORD_LOCATION_RE = /(اين|أين)[^.!؟]*كلمه|اعرض\s*الايات[^.!؟]*كلمه|فيها\s*كلمه/;
@@ -78,7 +108,7 @@ function classify(normalizedQuery: string): QuestionIntent {
   // trigger word with it so order here mainly documents precedence.
   if (WORD_LOCATION_RE.test(normalizedQuery)) return 'WORD_LOCATION';
 
-  if (QURAN_STATS_RE.test(normalizedQuery)) return 'QURAN_STATS';
+  if (isQuranStats(normalizedQuery)) return 'QURAN_STATS';
 
   if (TAFSIR_EXPLANATION_RE.test(normalizedQuery)) return 'TAFSIR_EXPLANATION';
 

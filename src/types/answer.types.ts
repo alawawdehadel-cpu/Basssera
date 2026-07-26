@@ -68,6 +68,13 @@ export interface TafsirDisplayItem {
   explanation: string;
   /** Word-safe collapsed preview (see createArabicExcerpt). */
   excerpt: string;
+  /**
+   * When this source's commentary originally covers a WIDER range than the
+   * requested/displayed scope, its real range — so the card can show an honest
+   * "this source discusses verses X–Y together" note.
+   */
+  sourceCoversStart?: number;
+  sourceCoversEnd?: number;
 }
 
 /**

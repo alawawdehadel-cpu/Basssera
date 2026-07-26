@@ -2,6 +2,7 @@ import type { AnswerReference, TafseerGroup } from '../types/data.types';
 import type { WordMeaningsMap, QuranTopicsMap } from '../types/data.types';
 import type { AppLanguage } from '../types/chat.types';
 import { normalizeText } from './textNormalizer';
+import { withAyahMarker } from './numerals';
 import { resolveNamedAyah } from './namedAyahs';
 import wordMeaningsRaw from '../data/wordMeanings.json';
 import quranTopicsRaw from '../data/quranTopics.json';
@@ -187,7 +188,7 @@ function ayahRef(a: FlatAyah, lang: AppLanguage): AnswerReference {
     type: 'quran',
     surah: lang === 'ar' ? a.surahName : a.surahNameEn,
     ayah: String(a.ayahNumber),
-    text: a.text,
+    text: withAyahMarker(a.text, a.ayahNumber),
   };
 }
 

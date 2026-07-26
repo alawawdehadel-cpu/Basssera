@@ -13,7 +13,12 @@ import { setTafsirKvStore } from '../services/tafsirCache';
 import { planTafsirPassage } from '../utils/tafsir/tafsirPlan';
 import { contentIdsFor } from '../utils/tafsir/tafsirSearch';
 import { isTafsirSourceId } from '../utils/tafsirSources';
-import { ASSISTANT_HADITH_COUNT, buildHadithQuery, shouldSearchHadith } from '../utils/hadithQuery';
+import {
+  ASSISTANT_HADITH_COUNT,
+  buildHadithQuery,
+  isQuranAnalyticsIntent,
+  shouldSearchHadith,
+} from '../utils/hadithQuery';
 import { detectIntent } from '../utils/intentDetector';
 import { sanitizeInput } from '../utils/inputSanitizer';
 
@@ -94,6 +99,13 @@ export function useAssistant() {
    * previous ayah. Cleared on reset.
    */
   const tafsirContext = useRef<TafsirConversationContext | null>(null);
+  /**
+   * Monotonic session/generation id. Bumped by clearChat, and captured by each
+   * ask(): a response whose captured id no longer matches was started before a
+   * clear and must be dropped, so an in-flight answer can never reappear after
+   * the conversation was reset.
+   */
+  const generation = useRef(0);
 
   const patch = useCallback((id: string, fields: Partial<AssistantTurn>) => {
     setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, ...fields } : t)));
@@ -117,9 +129,15 @@ export function useAssistant() {
       if (!question || thinking) return;
 
       const id = nextId();
+      const gen = generation.current;
       const intent = detectIntent(question).intent;
+      // Analytical Quran questions are answered ONLY by the analytics system —
+      // never search or attach hadith for them (§1).
       const hadithLed = intent === 'HADITH_LOOKUP';
-      const hadithQuery = shouldSearchHadith(intent) ? buildHadithQuery(question) : null;
+      const hadithQuery =
+        !isQuranAnalyticsIntent(intent) && shouldSearchHadith(intent)
+          ? buildHadithQuery(question)
+          : null;
 
       setTurns((prev) => [
         ...prev,
@@ -175,6 +193,8 @@ export function useAssistant() {
       prefetch
         .then((remote) => {
           if (tafsirController.signal.aborted) return;
+          // Dropped if the chat was cleared while this answer was in flight.
+          if (gen !== generation.current) return;
 
           // A content id is `{source}__{hash}`, so an unresolved id names the
           // source that could not be read. That distinction matters: the
@@ -202,6 +222,7 @@ export function useAssistant() {
           const answer = buildChatAnswer(result, 'ar');
           const remaining = Math.max(0, THINKING_MS - (Date.now() - startedAt));
           timer.current = setTimeout(() => {
+            if (gen !== generation.current) return; // cleared meanwhile
             setThinking(false);
             patch(id, { answer });
           }, remaining);
@@ -218,7 +239,7 @@ export function useAssistant() {
 
       searchHadith({ query: hadithQuery, degree: ASSISTANT_DEGREE, page: 1 }, controller.signal)
         .then(({ page, fromCache }) => {
-          if (controller.signal.aborted) return;
+          if (controller.signal.aborted || gen !== generation.current) return;
           const results = page.results.slice(0, ASSISTANT_HADITH_COUNT);
           patch(id, {
             hadith: results,
@@ -226,7 +247,7 @@ export function useAssistant() {
           });
         })
         .catch((error: unknown) => {
-          if (controller.signal.aborted) return;
+          if (controller.signal.aborted || gen !== generation.current) return;
           patch(id, {
             hadithStatus: 'error',
             hadithMessageKey:
@@ -244,13 +265,26 @@ export function useAssistant() {
     setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, feedback } : t)));
   }, []);
 
-  const reset = useCallback(() => {
-    if (timer.current) clearTimeout(timer.current);
+  /**
+   * The ONE place that fully resets the conversation (§2). Cancels every active
+   * request/stream, bumps the generation so any answer already in flight is
+   * dropped instead of reappearing, clears the pending-answer timer, and wipes
+   * all in-memory chat state (turns, thinking, follow-up context). The live
+   * assistant keeps no persisted conversation, so there is nothing on disk to
+   * remove; saved answers/bookmarks are a separate feature and are left intact.
+   */
+  const clearChat = useCallback(() => {
+    generation.current += 1; // invalidate in-flight answers
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
     cancelHadith();
     setTurns([]);
     setThinking(false);
     tafsirContext.current = null;
   }, [cancelHadith]);
 
-  return { turns, thinking, ask, setFeedback, reset };
+  // `reset` kept as an alias so any external caller keeps working.
+  return { turns, thinking, ask, setFeedback, clearChat, reset: clearChat };
 }

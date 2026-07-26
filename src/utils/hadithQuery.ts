@@ -122,12 +122,26 @@ export function buildHadithQuery(raw: string): string | null {
 }
 
 /**
+ * Analytical / statistical Quran-data intents. These are answered EXCLUSIVELY
+ * by the Quran analytics system — a count, a comparison, a superlative, a
+ * first/last occurrence or a word location must never pull in hadith results,
+ * even though a topic word (e.g. «الصبر») exists in both corpora.
+ */
+export function isQuranAnalyticsIntent(intent: QuestionIntent): boolean {
+  return intent === 'QURAN_STATS' || intent === 'WORD_LOCATION';
+}
+
+/**
  * Whether a question should trigger a hadith lookup at all.
  *
- * Ruling questions are deliberately excluded: the app answers those with
- * a referral to scholars, and attaching narrations to that referral would
- * read as the evidence for a ruling the app is explicitly refusing to give.
+ * Ruling questions are excluded: the app answers those with a referral to
+ * scholars, and attaching narrations would read as evidence for a ruling it is
+ * refusing to give. Analytical Quran questions are excluded because they are
+ * answered only from the Quran analytics system — mixing in hadith would turn a
+ * statistic into a general Islamic answer (§1).
  */
 export function shouldSearchHadith(intent: QuestionIntent): boolean {
-  return intent !== 'FATWA_SAFETY' && intent !== 'UNKNOWN';
+  if (intent === 'FATWA_SAFETY' || intent === 'UNKNOWN') return false;
+  if (isQuranAnalyticsIntent(intent)) return false;
+  return true;
 }

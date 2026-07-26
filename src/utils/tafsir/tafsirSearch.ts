@@ -4,6 +4,8 @@ import type {
   TafsirSourceId,
 } from '../../types/data.types';
 import { getAyah, getSurahMeta } from '../quranDataLoader';
+import { withAyahMarker } from '../numerals';
+import { shouldRenderBismillah, stripLeadingBismillah } from '../surahOpening';
 import { sourceArabicName } from '../tafsirSources';
 import { passagesFor } from './tafsirManifest';
 import type { TafsirQuestionAnalysis } from './tafsirQuestionAnalyzer';
@@ -53,16 +55,41 @@ function surahNameOf(surah: number): string {
   return meta.nameArabic.replace(/^سُورَةُ?\s+/, '').replace(/^سورة\s+/, '').trim();
 }
 
+/**
+ * Verse text for display. For verse 1 of a surah that opens with a standalone
+ * Basmala (every surah except Al-Fatihah, whose Basmala IS verse 1, and
+ * At-Tawbah, which has none), the stored text embeds the Basmala; it is
+ * stripped here so it is never shown twice. quran.json is never mutated.
+ */
 function ayahTextOf(surah: number, ayah: number): string {
-  return getAyah(surah, ayah)?.textUthmani ?? '';
+  const raw = getAyah(surah, ayah)?.textUthmani ?? '';
+  if (ayah === 1 && shouldRenderBismillah(surah)) return stripLeadingBismillah(raw);
+  return raw;
+}
+
+/**
+ * Text of ayahs [start, end], each Basmala-cleaned and followed by its own
+ * decorated ayah marker (﴿٢﴾), one verse per line. So a verse-range or
+ * full-surah answer shows every verse ending with its number (§4).
+ */
+function ayahTextRange(surah: number, start: number, end: number): string {
+  const parts: string[] = [];
+  for (let n = start; n <= end && n - start < 20; n++) {
+    const t = ayahTextOf(surah, n);
+    if (t) parts.push(withAyahMarker(t, n));
+  }
+  return parts.join('\n').trim() || withAyahMarker(ayahTextOf(surah, start), start);
 }
 
 function toMatch(
   source: TafsirSourceId,
   surah: number,
-  ayahStart: number,
-  ayahEnd: number,
+  /** The range shown in the heading (the REQUESTED scope, unified across sources). */
+  displayStart: number,
+  displayEnd: number,
   explanation: string,
+  /** The source's own wider grouped range, if any (drives the honest note). */
+  covers?: { start: number; end: number },
 ): TafsirSearchMatch {
   return {
     source,
@@ -70,11 +97,12 @@ function toMatch(
     surahNumber: surah,
     surahName: surahNameOf(surah),
     surahTransliteration: getSurahMeta(surah)?.nameEnglish ?? '',
-    ayahRange: rangeLabel(ayahStart, ayahEnd),
-    ayahStart,
-    ayahEnd,
-    ayahText: ayahTextOf(surah, ayahStart),
+    ayahRange: rangeLabel(displayStart, displayEnd),
+    ayahStart: displayStart,
+    ayahEnd: displayEnd,
+    ayahText: ayahTextRange(surah, displayStart, displayEnd),
     explanation,
+    ...(covers ? { sourceCoversStart: covers.start, sourceCoversEnd: covers.end } : {}),
   };
 }
 
@@ -129,6 +157,7 @@ export function retrieveTafsirMatches(
   injected?: TafsirInjection,
 ): TafsirRetrieval {
   const { surahNumber, surahName, ayahStart, ayahEnd } = analysis;
+  const fullSurah = analysis.fullSurah === true;
   const matches: TafsirSearchMatch[] = [];
   const failedSources: TafsirSourceId[] = [];
 
@@ -169,7 +198,29 @@ export function retrieveTafsirMatches(
 
     anyFound = true;
     for (const { ref, text } of resolved) {
-      matches.push(toMatch(source, surahNumber, ref.ayahStart, ref.ayahEnd, text));
+      if (fullSurah) {
+        // Whole-surah request: each passage keeps its OWN range heading, so
+        // the surah reads verse-group by verse-group in ayah order.
+        matches.push(toMatch(source, surahNumber, ref.ayahStart, ref.ayahEnd, text));
+      } else {
+        // Single verse / range: EVERY source displays under the same requested
+        // scope. When the source's passage is wider, record its real range so
+        // the card can add an honest "discusses verses X–Y together" note —
+        // never silently claim the wider range was requested.
+        const dispStart = ayahStart ?? ref.ayahStart;
+        const dispEnd = ayahEnd ?? ref.ayahEnd;
+        const wider = ref.ayahStart < dispStart || ref.ayahEnd > dispEnd;
+        matches.push(
+          toMatch(
+            source,
+            surahNumber,
+            dispStart,
+            dispEnd,
+            text,
+            wider ? { start: ref.ayahStart, end: ref.ayahEnd } : undefined,
+          ),
+        );
+      }
     }
   }
 

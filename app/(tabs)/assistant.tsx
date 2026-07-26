@@ -14,8 +14,6 @@ import Txt from '../../src/components/basirah/Txt';
 import { useAppLanguage } from '../../src/hooks/useAppLanguage';
 import { useAssistant, type AssistantTurn } from '../../src/hooks/useAssistant';
 import { useUserData } from '../../src/hooks/useUserData';
-import type { TafsirSourceId } from '../../src/types/data.types';
-import { ALL_TAFSIR_SOURCE_IDS, TAFSIR_SOURCES } from '../../src/utils/tafsirSources';
 import { formatNumber } from '../../src/utils/numerals';
 import { FONT } from '../../src/theme/fonts';
 import { useTheme } from '../../src/theme/ThemeContext';
@@ -118,64 +116,6 @@ function PulsingSpark() {
       >
         <Icon name="spark" size={22} color="#DFC96C" strokeWidth={1.8} />
       </View>
-    </View>
-  );
-}
-
-type SourceKey = 'all' | TafsirSourceId;
-
-/** RTL single-select chip row for the active tafsir source. */
-function SourceSelector({
-  value,
-  onChange,
-}: {
-  value: SourceKey;
-  onChange: (v: SourceKey) => void;
-}) {
-  const { colors } = useTheme();
-  const { t } = useAppLanguage();
-
-  const options: { key: SourceKey; label: string }[] = [
-    { key: 'all', label: t('assistant.sourceAll') },
-    ...TAFSIR_SOURCES.map((s) => ({ key: s.id as SourceKey, label: s.shortArabicName })),
-  ];
-
-  return (
-    <View
-      accessibilityRole="tablist"
-      style={{
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 8,
-        paddingHorizontal: LAYOUT.screenX,
-        paddingBottom: 12,
-      }}
-    >
-      <Txt size={11.5} weight={700} color={colors.text2} style={{ width: '100%', marginBottom: 2 }}>
-        {t('assistant.sourcesTitle')}
-      </Txt>
-      {options.map((o) => {
-        const active = o.key === value;
-        return (
-          <Press
-            key={o.key}
-            onPress={() => onChange(o.key)}
-            accessibilityLabel={o.label}
-            style={{
-              paddingVertical: 8,
-              paddingHorizontal: 14,
-              borderRadius: 11,
-              borderWidth: 1,
-              borderColor: active ? colors.emerald : colors.border,
-              backgroundColor: active ? colors.emerald : colors.surface,
-            }}
-          >
-            <Txt size={12} weight={600} color={active ? '#fff' : colors.text}>
-              {o.label}
-            </Txt>
-          </Press>
-        );
-      })}
     </View>
   );
 }
@@ -400,22 +340,17 @@ export default function AssistantScreen() {
   const params = useLocalSearchParams<{ ask?: string }>();
   const { colors } = useTheme();
   const { t } = useAppLanguage();
-  const { turns, thinking, ask } = useAssistant();
+  const { turns, thinking, ask, clearChat } = useAssistant();
   const [input, setInput] = useState('');
-  const [sourceKey, setSourceKey] = useState<SourceKey>('all');
   const scrollRef = useRef<ScrollView>(null);
   const lastAsked = useRef<string | null>(null);
 
-  // 'all' searches every source; a specific chip narrows to that one. A source
-  // named inside the question still overrides this per-message (see search).
-  const selectedSources: TafsirSourceId[] =
-    sourceKey === 'all' ? [...ALL_TAFSIR_SOURCE_IDS] : [sourceKey];
-
-  // Deep-link: a question passed from tafsir/search/verse-sheet.
+  // Deep-link: a question passed from tafsir/search/verse-sheet. Tafsir sources
+  // are resolved from the question itself (default = all), not a UI selector.
   useEffect(() => {
     if (params.ask && params.ask !== lastAsked.current) {
       lastAsked.current = params.ask;
-      ask(params.ask, selectedSources);
+      ask(params.ask);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.ask]);
@@ -428,7 +363,7 @@ export default function AssistantScreen() {
   const submit = (text?: string) => {
     const q = (text ?? input).trim();
     if (!q) return;
-    ask(q, selectedSources);
+    ask(q);
     setInput('');
   };
 
@@ -450,7 +385,7 @@ export default function AssistantScreen() {
         }}
       >
         <PulsingSpark />
-        <View>
+        <View style={{ flex: 1 }}>
           <Txt size={22} weight={700} color={colors.text}>
             {t('assistant.title')}
           </Txt>
@@ -458,10 +393,26 @@ export default function AssistantScreen() {
             {t('assistant.status')}
           </Txt>
         </View>
+        {/* Clear the whole conversation (§2) — only once there is one. */}
+        {hasConversation ? (
+          <Press
+            onPress={clearChat}
+            accessibilityLabel={t('assistant.clearChat')}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surface,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Icon name="refresh" size={18} color={colors.text2} strokeWidth={1.8} />
+          </Press>
+        ) : null}
       </View>
-
-      {/* tafsir source selector — الجميع / السعدي / ابن كثير / الطبري */}
-      <SourceSelector value={sourceKey} onChange={setSourceKey} />
 
       <ScrollView
         ref={scrollRef}

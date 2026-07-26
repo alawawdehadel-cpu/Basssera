@@ -41,6 +41,8 @@ const { loadTafseerData } = require('../src/utils/dataLoader.ts');
 const { resolveRequestedTafsirSources } = require('../src/utils/tafsirSources.ts');
 const { planTafsirPassage } = require('../src/utils/tafsir/tafsirPlan.ts');
 const { contentIdsFor } = require('../src/utils/tafsir/tafsirSearch.ts');
+const { shouldSearchHadith, isQuranAnalyticsIntent } = require('../src/utils/hadithQuery.ts');
+const { formatAyahMarker, stripExistingAyahMarker } = require('../src/utils/numerals.ts');
 
 let passed = 0;
 let failed = 0;
@@ -323,6 +325,176 @@ async function main() {
     const r = buildChatAnswer(searchAnswer('ما تفسير الآية 900 من سورة الإخلاص؟', saadi, 'ar', { selectedSources: ['al_saadi', 'ibn_kathir'] }), 'ar');
     check('missingSources lists both', setEq(r.missingSources || [], ['al_saadi', 'ibn_kathir']), (r.missingSources || []).join(','));
     check('no explanation when nothing found', !r.assistantExplanation);
+  }
+
+  // 20) FULL-SURAH request returns EVERY verse, not just verse 1 (§2)
+  {
+    const a = analyzeTafsirQuestion('تفسير سورة الفاتحة');
+    console.log('٢٠) تفسير سورة كاملة');
+    check('intent = surah_tafsir', a.intent === 'surah_tafsir', a.intent);
+    check('fullSurah flag set', a.fullSurah === true);
+    check('scope = whole surah 1..7', a.ayahStart === 1 && a.ayahEnd === 7, `${a.ayahStart}-${a.ayahEnd}`);
+
+    const r = buildChatAnswer(answerWithPassages('تفسير سورة الفاتحة'), 'ar');
+    const saadiGroup = (r.tafsirGroups || []).find((g) => g.source === 'al_saadi');
+    const startAyahs = saadiGroup ? saadiGroup.passages.map((p) => p.ayahStart) : [];
+    check('title says full surah', /\(كامل\)/.test(r.title || ''), r.title);
+    check('covers more than verse 1', startAyahs.length > 1, `passages=${startAyahs.length}`);
+    check('reaches the final verse (7)', saadiGroup && saadiGroup.passages.some((p) => p.ayahEnd >= 7));
+    check('Fatihah bismillah note = verse 1', /البسملة هي الآية الأولى/.test(r.summary || ''), r.summary);
+    // Fatihah verse 1's Quran text IS the Basmala (NOT stripped, unlike other surahs).
+    const rawFatiha = answerWithPassages('تفسير سورة الفاتحة');
+    const v1 = (rawFatiha.tafsirMatches || []).find((m) => m.ayahStart === 1 && m.source === 'al_saadi');
+    check('Fatihah v1 text keeps Basmala', !!v1 && /بِسْمِ/.test(v1.ayahText) && !/ٱلْحَمْدُ/.test(v1.ayahText), v1 && v1.ayahText.slice(0, 24));
+  }
+
+  // 21) Full-surah Bismillah rules for Baqarah (opening line) and Tawbah (none)
+  {
+    console.log('٢١) قواعد البسملة في السور الكاملة');
+    const rB = buildChatAnswer(answerWithPassages('تفسير سورة البقرة'), 'ar');
+    check('Baqarah: opening bismillah note', /تُعرض البسملة في فتح السورة/.test(rB.summary || ''), rB.summary);
+    const gB = (rB.tafsirGroups || []).find((g) => g.source === 'al_saadi');
+    check('Baqarah does not stop at verse 1', gB && gB.passages.length > 1, gB && String(gB.passages.length));
+
+    const rT = buildChatAnswer(answerWithPassages('تفسير سورة التوبة'), 'ar');
+    check('Tawbah: no bismillah note', /لا تُعرض البسملة/.test(rT.summary || ''), rT.summary);
+  }
+
+  // 22) Bismillah is stripped from verse-1 tafsir text (non-Fatihah/Tawbah)
+  {
+    console.log('٢٢) حذف البسملة المكررة من نص الآية الأولى');
+    const { getAyah } = require('../src/utils/quranDataLoader.ts');
+    const raw = getAyah(2, 1).textUthmani; // Baqarah 1 stored WITH Basmala prefix
+    const r = answerWithPassages('ما تفسير الآية 1 من سورة البقرة؟');
+    const m = (r.tafsirMatches || []).find((x) => x.ayahStart === 1);
+    check('stored text has Basmala prefix', /بِسْمِ/.test(raw));
+    check('displayed ayahText has Basmala removed', !!m && !/^﻿?\s*بِسْمِ/.test(m.ayahText), m && m.ayahText.slice(0, 20));
+  }
+
+  // 23) UNIFIED scope: every source shows the SAME requested verse heading (§3)
+  {
+    console.log('٢٣) نطاق موحّد عبر المصادر');
+    const r = answerWithPassages('اشرح الآية 2 من سورة البقرة بكل التفاسير', {
+      selectedSources: ['al_saadi', 'ibn_kathir', 'al_tabari'],
+    });
+    const found = (r.tafsirMatches || []).filter((m) => !m.notFound);
+    check('all sources heading = requested verse 2', found.length > 0 && found.every((m) => m.ayahStart === 2 && m.ayahEnd === 2), found.map((m) => `${m.source}:${m.ayahStart}-${m.ayahEnd}`).join(' '));
+    // Any source whose passage groups a wider range carries the honest note fields.
+    const wider = found.filter((m) => m.sourceCoversStart !== undefined);
+    check('wider grouped sources record their real range', wider.every((m) => m.sourceCoversStart <= 2 && m.sourceCoversEnd >= 2));
+  }
+
+  // 24) Analytical intent routing (§2/§15) — superlatives/comparison/first-last
+  {
+    console.log('٢٤) تصنيف نية الأسئلة التحليلية');
+    check('longest surah → QURAN_STATS', detectIntent('ما أطول سورة في القرآن؟').intent === 'QURAN_STATS');
+    check('shortest ayah → QURAN_STATS', detectIntent('ما أقصر آية؟').intent === 'QURAN_STATS');
+    check('compare words → QURAN_STATS', detectIntent('قارن بين ذكر الدنيا والآخرة').intent === 'QURAN_STATS');
+    check('first occurrence → QURAN_STATS', detectIntent('ما أول موضع وردت فيه كلمة الرحمن؟').intent === 'QURAN_STATS');
+    check('word location → WORD_LOCATION', detectIntent('أين وردت كلمة الصبر؟').intent === 'WORD_LOCATION');
+    // A tafsir comparison must NOT be hijacked into analytics.
+    check('tafsir compare stays tafsir-shaped', detectIntent('قارن بين السعدي وابن كثير في آية الكرسي').intent !== 'QURAN_STATS');
+  }
+
+  // 25) Analytics run from quran.json, INDEPENDENT of tafsir groups (§1)
+  {
+    console.log('٢٥) الإحصاء يعمل بدون بيانات التفسير (groups=null)');
+    const r = searchAnswer('ما أطول سورة في القرآن؟', null, 'ar'); // groups === null
+    check('answer from analytics source', r.source === 'analytics', r.source);
+    check('states the metric (عدد الآيات)', /عدد الآيات/.test(r.answer || ''));
+    check('returns Al-Baqarah', /البقرة/.test(r.answer || ''), r.answer);
+    check('returns 286', /286/.test(r.answer || ''));
+  }
+
+  // 26) Shortest surah returns ALL tied surahs (§5)
+  {
+    console.log('٢٦) أقصر سورة — التعادل يُعرض كاملًا');
+    const r = searchAnswer('ما أقصر سورة في القرآن؟', null, 'ar');
+    const names = ['الكوثر', 'العصر', 'النصر'].filter((n) => (r.answer || '').includes(n));
+    check('all three tied surahs present', names.length === 3, names.join(','));
+    check('states 3 ayahs each', /3 آيات/.test(r.answer || ''));
+  }
+
+  // 27) Longest ayah — reference + character rule (§4/§13)
+  {
+    console.log('٢٧) أطول آية — مرجع وقاعدة العد');
+    const r = searchAnswer('ما أطول آية في القرآن؟', null, 'ar');
+    check('mentions surah + ayah (البقرة 282)', /البقرة/.test(r.answer || '') && /282/.test(r.answer || ''), r.answer);
+    check('states character rule', /الأحرف|أحرف/.test(r.answer || ''));
+    check('has a Quran reference', Array.isArray(r.references) && r.references.length > 0);
+  }
+
+  // 28) Comparison computes both, same rule (§11)
+  {
+    console.log('٢٨) مقارنة تحسب الطرفين');
+    const r = searchAnswer('قارن بين ذكر الدنيا والآخرة', null, 'ar');
+    check('source analytics (not tafsir)', r.source === 'analytics', r.source);
+    check('both counted (115 each — famous parity)', /115/.test(r.answer || ''), r.answer);
+    check('has comparison stats', !!r.stats && Array.isArray(r.stats.items) && r.stats.items.length === 2);
+  }
+
+  // 29) Juz scope from quran.json (§8) — computed without tafsir
+  {
+    console.log('٢٩) نطاق الجزء من quran.json');
+    const r = searchAnswer('كم آية في الجزء الثلاثين؟', null, 'ar');
+    check('answer from analytics', r.source === 'analytics', r.source);
+    check('scoped to Juz 30', /الجزء 30/.test(r.answer || ''), r.answer);
+    check('computed an ayah count', /\d+ آية/.test(r.answer || ''));
+  }
+
+  // 30) Surah-scoped exact word count (§7)
+  {
+    console.log('٣٠) عدّ كلمة ضمن سورة');
+    const r = searchAnswer('كم مرة ذكرت كلمة الصبر في سورة البقرة؟', null, 'ar');
+    check('scoped to Al-Baqarah', /سورة البقرة/.test(r.answer || ''), r.answer);
+    check('source analytics', r.source === 'analytics');
+  }
+
+  // 31) Analytical questions NEVER trigger a hadith search (§1)
+  {
+    console.log('٣١) الأسئلة التحليلية لا تبحث في الحديث');
+    check('QURAN_STATS → no hadith', shouldSearchHadith('QURAN_STATS') === false);
+    check('WORD_LOCATION → no hadith', shouldSearchHadith('WORD_LOCATION') === false);
+    check('isQuranAnalyticsIntent(QURAN_STATS)', isQuranAnalyticsIntent('QURAN_STATS') === true);
+    check('FATWA → no hadith', shouldSearchHadith('FATWA_SAFETY') === false);
+    // Explicit hadith request still works.
+    check('HADITH_LOOKUP → hadith', shouldSearchHadith('HADITH_LOOKUP') === true);
+    check('«هات حديثًا عن الصبر» is HADITH_LOOKUP', detectIntent('هات حديثًا عن الصبر').intent === 'HADITH_LOOKUP');
+    // Each failing example from the spec must route away from hadith.
+    for (const q of [
+      'ما أطول سورة في القرآن؟', 'ما أقصر آية؟', 'كم مرة ذكرت كلمة الصبر؟',
+      'قارن بين الدنيا والآخرة', 'أين ذكرت كلمة الرحمن؟', 'ما أول موضع وردت فيه كلمة الجنة؟',
+    ]) {
+      const intent = detectIntent(q).intent;
+      check(`«${q}» → no hadith`, shouldSearchHadith(intent) === false, intent);
+    }
+  }
+
+  // 32) Decorated Arabic-Indic ayah markers (§4)
+  {
+    console.log('٣٢) علامات الآيات المزخرفة');
+    check('formatAyahMarker(1) = ﴿١﴾', formatAyahMarker(1) === '﴿١﴾', formatAyahMarker(1));
+    check('formatAyahMarker(12) = ﴿١٢﴾', formatAyahMarker(12) === '﴿١٢﴾', formatAyahMarker(12));
+    check('formatAyahMarker(286) = ﴿٢٨٦﴾', formatAyahMarker(286) === '﴿٢٨٦﴾', formatAyahMarker(286));
+    check('strips an existing ﴿﴾ marker', stripExistingAyahMarker('نص ﴿٢﴾') === 'نص');
+    check('strips an existing ۝ marker', stripExistingAyahMarker('نص ۝٢') === 'نص');
+    check('leaves unmarked text alone', stripExistingAyahMarker('نص الآية') === 'نص الآية');
+  }
+
+  // 33) Ayah markers appear in analytics + tafsir Quran references
+  {
+    console.log('٣٣) العلامات تظهر في مراجع القرآن');
+    const loc = searchAnswer('أين وردت كلمة الصبر؟', null, 'ar');
+    const refs = loc.references || [];
+    check('analytics refs carry a marker', refs.length > 0 && refs.every((r) => /﴿[٠-٩]+﴾/.test(r.text)), refs[0] && refs[0].text.slice(-10));
+    check('no double marker', refs.every((r) => (r.text.match(/﴿/g) || []).length === 1));
+
+    // Tafsir Quran evidence (verse range 1–3 of Al-Baqarah) — one marker per verse.
+    const taf = buildChatAnswer(answerWithPassages('ما تفسير الآيات 1 إلى 3 من سورة البقرة؟'), 'ar');
+    const qref = (taf.quranReferences || [])[0];
+    const markers = qref ? (qref.text.match(/﴿[٠-٩]+﴾/g) || []) : [];
+    check('range evidence has 3 markers', markers.length === 3, `markers=${markers.join('')}`);
+    check('markers are ١ ٢ ٣ in order', markers.join('') === '﴿١﴾﴿٢﴾﴿٣﴾', markers.join(''));
   }
 
   console.log('────────────────────────────────────────────');

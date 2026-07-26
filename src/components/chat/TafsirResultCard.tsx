@@ -23,17 +23,20 @@ import Txt from '../basirah/Txt';
  */
 export type TafsirResultCardProps = { group: TafsirSourceGroup };
 
+/** "الآية 255" or "الآيات 1–5" (Arabic-Indic digits). */
+function referenceRange(start: number, end: number): string {
+  return start === end
+    ? `الآية ${formatNumber(start)}`
+    : `الآيات ${formatNumber(start)}–${formatNumber(end)}`;
+}
+
 /** "سورة البقرة — الآية 255" or "سورة الفاتحة — الآيات 1–5" (Arabic-Indic digits). */
 function referenceLine(surahName: string, start: number, end: number): string {
   // Display-only cleanup: source datasets differ (As-Sa'di keeps tashkeel on
   // surah names, the others don't) — strip it so all cards read consistently.
   // The stored tafsir data is never modified.
   const name = stripTashkeel(surahName).replace(/^سورة\s+/, '').trim();
-  const range =
-    start === end
-      ? `الآية ${formatNumber(start)}`
-      : `الآيات ${formatNumber(start)}–${formatNumber(end)}`;
-  return `سورة ${name} — ${range}`;
+  return `سورة ${name} — ${referenceRange(start, end)}`;
 }
 
 /** A single passage with its own collapse state (isolated for perf). */
@@ -51,11 +54,22 @@ const Passage = memo(function Passage({
   const truncated = item.explanation.trim() !== item.excerpt.trim();
   const body = expanded ? item.explanation : item.excerpt;
 
+  // The source's own commentary groups a wider range than what was requested.
+  const wider =
+    item.sourceCoversStart !== undefined &&
+    item.sourceCoversEnd !== undefined &&
+    (item.sourceCoversStart < item.ayahStart || item.sourceCoversEnd > item.ayahEnd);
+
   return (
     <View style={{ marginTop: showReference ? 12 : 6 }}>
       {showReference ? (
         <Txt size={12} weight={600} color={colors.emerald} style={{ marginBottom: 6 }}>
           {referenceLine(item.surahName, item.ayahStart, item.ayahEnd)}
+        </Txt>
+      ) : null}
+      {wider ? (
+        <Txt size={11} lh={1.7} color={colors.text2} style={{ marginBottom: 6, writingDirection: 'rtl' }}>
+          {`ملاحظة: يناقش هذا المصدر ${referenceRange(item.sourceCoversStart!, item.sourceCoversEnd!)} مجتمعة؛ والمعروض يخص ${referenceRange(item.ayahStart, item.ayahEnd)}.`}
         </Txt>
       ) : null}
       <Txt

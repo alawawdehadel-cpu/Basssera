@@ -7,7 +7,12 @@ import type {
 } from '../types/data.types';
 import type { AppLanguage, MessageStats } from '../types/chat.types';
 import { normalizeText, containsArabic } from './textNormalizer';
-import { tryAnalytics } from './quranAnalytics';
+import {
+  getAnalyticsSurahLookup,
+  getQuranAnalyticsEntries,
+  tryAnalytics,
+} from './quranAnalytics';
+import { getQuranValidation } from './quranDataLoader';
 import { tryExtendedIntents } from './quranIntents';
 import { detectIntent } from './intentDetector';
 import { resolveNamedAyah } from './namedAyahs';
@@ -510,8 +515,8 @@ function routeByIntent(
 
   const analytics = tryAnalytics(
     normQuery,
-    tafseerIndex,
-    (name) => surahNameLookup.get(name) ?? null,
+    getQuranAnalyticsEntries(),
+    getAnalyticsSurahLookup(),
     lang,
   );
   if (analytics) {
@@ -536,6 +541,35 @@ function routeByIntent(
 
 const NO_PASSAGE_AR =
   'لم أجد نصًا مطابقًا في التفسير المحدد داخل بيانات التطبيق.';
+
+/** Max passages shown PER SOURCE for a whole-surah request (rest is paginated). */
+const FULL_SURAH_MAX_PER_SOURCE = 15;
+
+/**
+ * Caps a whole-surah result to keep the chat readable: at most N passages per
+ * source, in ayah order (matches are already sorted by source→ayah). Returns
+ * whether anything was dropped so the summary can say so honestly.
+ */
+function capFullSurahMatches(
+  all: TafsirSearchMatch[],
+  sources: TafsirSourceId[],
+): { matches: TafsirSearchMatch[]; truncatedFullSurah: boolean } {
+  const kept: TafsirSearchMatch[] = [];
+  let truncated = false;
+  for (const source of sources) {
+    const forSource = all.filter((m) => m.source === source);
+    if (forSource.length > FULL_SURAH_MAX_PER_SOURCE) truncated = true;
+    kept.push(...forSource.slice(0, FULL_SURAH_MAX_PER_SOURCE));
+  }
+  return { matches: kept, truncatedFullSurah: truncated };
+}
+
+/** The Bismillah display rule for a full-surah view (§1): Fatihah / Tawbah / rest. */
+function bismillahNoteForSurah(surah: number): string {
+  if (surah === 1) return 'البسملة هي الآية الأولى من سورة الفاتحة.';
+  if (surah === 9) return 'لا تُعرض البسملة في فاتحة سورة التوبة.';
+  return 'تُعرض البسملة في فتح السورة مرة واحدة دون رقم آية.';
+}
 
 /**
  * Handles a tafsir-passage question across the selected source(s). Returns
@@ -568,22 +602,32 @@ function handleMultiSourceTafsir(
 
   const { analysis, sources, comparison } = plan;
 
-  const { matches, failedSources, allMissing } = retrieveTafsirMatches(sources, analysis, {
+  const retrieved = retrieveTafsirMatches(sources, analysis, {
     passages: options?.prefetchedMatches,
     unavailableSources: options?.unavailableSources,
   });
+  const { failedSources, allMissing } = retrieved;
 
-  const range =
-    analysis.ayahStart === null
-      ? ''
-      : analysis.ayahStart === analysis.ayahEnd
-        ? `${analysis.ayahStart}`
-        : `${analysis.ayahStart}–${analysis.ayahEnd}`;
+  // A whole-surah request can yield very many passages; cap what we render per
+  // source and say so, rather than dumping hundreds of cards (spec: paginate).
+  const fullSurah = analysis.fullSurah === true;
+  const { matches, truncatedFullSurah } = fullSurah
+    ? capFullSurahMatches(retrieved.matches, sources)
+    : { matches: retrieved.matches, truncatedFullSurah: false };
+
   const surahLabel = analysis.surahName ?? `سورة ${analysis.surahNumber}`;
+  const range =
+    !fullSurah && analysis.ayahStart !== null
+      ? analysis.ayahStart === analysis.ayahEnd
+        ? `${analysis.ayahStart}`
+        : `${analysis.ayahStart}–${analysis.ayahEnd}`
+      : '';
 
-  const title = comparison
-    ? `مقارنة التفاسير — سورة ${surahLabel}${range ? ` الآية ${range}` : ''}`
-    : `تفسير سورة ${surahLabel}${range ? ` — الآية ${range}` : ''}`;
+  const title = fullSurah
+    ? `تفسير سورة ${surahLabel} (كامل)`
+    : comparison
+      ? `مقارنة التفاسير — سورة ${surahLabel}${range ? ` الآية ${range}` : ''}`
+      : `تفسير سورة ${surahLabel}${range ? ` — الآية ${range}` : ''}`;
 
   // Honest failure/absence messaging — never substitutes another source.
   let summary: string;
@@ -593,6 +637,13 @@ function handleMultiSourceTafsir(
     summary = `النصوص المتطابقة من ${sources.length} من التفاسير، منسوبة لكل مفسّر دون إصدار حكم بالاتفاق أو الاختلاف.`;
   } else {
     summary = `التفسير من ${sources.length === 1 ? 'المصدر المحدد' : 'المصادر المحددة'} كما ورد نصًّا في بيانات التطبيق.`;
+  }
+  // Bismillah rule for a full-surah display (§1).
+  if (fullSurah && analysis.surahNumber !== null && !allMissing) {
+    summary += ` ${bismillahNoteForSurah(analysis.surahNumber)}`;
+  }
+  if (truncatedFullSurah) {
+    summary += ' (عُرض جزء من مقاطع السورة؛ اطلب آيةً أو نطاقًا محددًا لعرض تفصيلي.)';
   }
   if (failedSources.length > 0) {
     const names = failedSources.map(sourceArabicName).join('، ');
@@ -689,6 +740,43 @@ export function searchAnswer(
     };
   }
 
+  // 0b) Quran analytical / statistical questions (§1–§3). Computed directly
+  // from quran.json — BEFORE tafsir, curated Q&A, keyword search and fallback,
+  // and INDEPENDENT of tafsir `groups` (which is empty now the tafsir text
+  // lives in Firestore). This is the fix for «ما أطول سورة؟» and friends
+  // falling through to tafsir search.
+  if (detected.intent === 'QURAN_STATS' || detected.intent === 'WORD_LOCATION') {
+    if (__DEV__) {
+      const v = getQuranValidation();
+      // eslint-disable-next-line no-console
+      console.debug('[AssistantIntent]', detected.intent);
+      // eslint-disable-next-line no-console
+      console.debug('[AssistantRoute]', 'quran-analytics');
+      // eslint-disable-next-line no-console
+      console.debug('[AnalyticsDataset]', { valid: v.valid, ayahCount: v.count });
+    }
+    const analytics = tryAnalytics(
+      normQuery,
+      getQuranAnalyticsEntries(),
+      getAnalyticsSurahLookup(),
+      replyLang,
+    );
+    if (analytics) {
+      if (analytics.kind === 'clarify') {
+        return { kind: 'clarify', answer: analytics.answer };
+      }
+      return {
+        kind: 'answer',
+        source: 'analytics',
+        title: analytics.title,
+        answer: analytics.answer,
+        note: analytics.note,
+        stats: analytics.stats,
+        references: analytics.references,
+      };
+    }
+  }
+
   // 1) exact question in the curated Q&A file
   const exactQa = qaIndex.find((i) => i.normQuestion === normQuery);
   if (exactQa) {
@@ -744,11 +832,12 @@ export function searchAnswer(
   }
 
   // 4) counting / analytics questions («كم شدة في القرآن», «كم مرة ذكرت كلمة الله»)
-  if (groups) {
+  //    Computed from quran.json — NOT gated on tafsir `groups` (§1/§3).
+  {
     const analytics = tryAnalytics(
       normQuery,
-      tafseerIndex,
-      (name) => surahNameLookup.get(name) ?? null,
+      getQuranAnalyticsEntries(),
+      getAnalyticsSurahLookup(),
       replyLang,
     );
     if (analytics) {

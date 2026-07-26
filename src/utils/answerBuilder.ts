@@ -129,6 +129,9 @@ function buildTafsirGroups(matches: TafsirSearchMatch[]): TafsirSourceGroup[] {
       ayahEnd: m.ayahEnd,
       explanation: m.explanation,
       excerpt: createArabicExcerpt(m.explanation, 600),
+      ...(m.sourceCoversStart !== undefined && m.sourceCoversEnd !== undefined
+        ? { sourceCoversStart: m.sourceCoversStart, sourceCoversEnd: m.sourceCoversEnd }
+        : {}),
     });
   }
 

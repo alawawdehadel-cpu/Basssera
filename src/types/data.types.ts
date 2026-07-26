@@ -99,6 +99,15 @@ export interface TafsirSearchMatch {
   /** The full, verbatim tafsir explanation — never summarized here. */
   explanation: string;
   /**
+   * When the source's own commentary groups a WIDER range than the requested
+   * scope (e.g. the user asked verse 2 but this source discusses verses 1–4
+   * together), these hold the source's real range so the card can show an
+   * honest note. `ayahStart`/`ayahEnd`/`ayahRange` above always reflect the
+   * REQUESTED scope, so every source displays under the same heading.
+   */
+  sourceCoversStart?: number;
+  sourceCoversEnd?: number;
+  /**
    * True when the source was requested but has no matching passage (e.g. a
    * source whose dataset is missing or does not cover this ayah). The UI
    * shows an honest "not found in this source" card — never another source's

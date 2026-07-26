@@ -36,6 +36,36 @@ export function toArabicDigits(value: number | string): string {
     .join('');
 }
 
+/** Arabic-Indic form of an ayah number (alias of toArabicDigits, spec name). */
+export function toArabicIndicNumber(value: number): string {
+  return toArabicDigits(value);
+}
+
+/**
+ * The decorated Quran ayah marker, e.g. ﴿٢﴾. One shared formatter used for
+ * every verse the chatbot renders, so numbering is consistent everywhere.
+ */
+export function formatAyahMarker(ayahNumber: number): string {
+  return `﴿${toArabicDigits(ayahNumber)}﴾`;
+}
+
+/**
+ * Removes a trailing ayah-number ornament (﴿٢﴾ / ۝٢ / a bare trailing number)
+ * some stored texts already carry, so a marker is never rendered twice.
+ */
+export function stripExistingAyahMarker(text: string): string {
+  return text.replace(/[﴿۝]\s*[٠-٩0-9]+\s*﴾?\s*$/u, '').trimEnd();
+}
+
+/**
+ * A single verse followed by exactly one decorated ayah marker. Applied at the
+ * point a Quran reference's text is built, so the renderer stays dumb and no
+ * verse is ever numbered twice.
+ */
+export function withAyahMarker(text: string, ayahNumber: number): string {
+  return `${stripExistingAyahMarker(text)} ${formatAyahMarker(ayahNumber)}`;
+}
+
 /** "٤:١٢" style playback time. */
 export function toArabicTime(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));

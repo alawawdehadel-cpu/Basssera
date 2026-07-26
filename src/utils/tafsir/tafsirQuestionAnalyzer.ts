@@ -53,6 +53,12 @@ export interface TafsirQuestionAnalysis {
 
   ayahStart: number | null;
   ayahEnd: number | null;
+  /**
+   * True when the user asked for a WHOLE surah's tafsir ("تفسير سورة الكهف").
+   * ayahStart/ayahEnd are then resolved to the surah's full range [1, count],
+   * so retrieval covers every verse — never just verse 1.
+   */
+  fullSurah: boolean;
 
   namedAyah: string | null;
   quotedPhrase: string | null;
@@ -152,9 +158,9 @@ function ordinalAyah(normQuery: string): number | null {
 
 /** Parse an explicit ayah or ayah range out of the query, given its surah. */
 function parseAyahRange(normQuery: string, surah: number | null): RangeParse {
-  // "من X إلى/حتى/ل Y" — note normalizeText already mapped ى→ي, so «إلى»
-  // and «الى» both arrive here as «الي», and «حتى» as «حتي».
-  const fromTo = normQuery.match(/من\s+(\d+)\s+(?:الي|حتي|ل)\s+(\d+)/);
+  // "(من) X إلى/حتى/ل/– Y" — «من» is optional so «الآيات 1 إلى 3» parses too.
+  // normalizeText already mapped ى→ي, so «إلى»/«الى»→«الي», «حتى»→«حتي».
+  const fromTo = normQuery.match(/(?:من\s+)?(\d+)\s*(?:الي|حتي|ل|–|—|-)\s*(\d+)/);
   if (fromTo) {
     const a = Number(fromTo[1]);
     const b = Number(fromTo[2]);
@@ -269,6 +275,7 @@ export function analyzeTafsirQuestion(
     surahName: null,
     ayahStart: null,
     ayahEnd: null,
+    fullSurah: false,
     namedAyah: null,
     quotedPhrase: null,
     requestedSources,
@@ -373,12 +380,18 @@ export function analyzeTafsirQuestion(
         confidence: 0.9,
       };
     }
-    // Surah named, no ayah → whole-surah tafsir request.
+    // Surah named, no ayah → WHOLE-surah tafsir request. Resolve the scope to
+    // the surah's full range so retrieval returns every verse, not just the
+    // first passage. The scope is the single source of truth for all sources.
+    const count = surahAyahCount(surahNumber);
     return {
       ...base,
       intent: compareSources ? 'compare_tafsir' : 'surah_tafsir',
       surahNumber,
       surahName: surahDisplayName(surahNumber),
+      ayahStart: count ? 1 : null,
+      ayahEnd: count ?? null,
+      fullSurah: count !== null,
       confidence: 0.7,
     };
   }

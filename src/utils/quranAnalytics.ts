@@ -1,6 +1,12 @@
 import type { AnswerReference, TafseerGroup } from '../types/data.types';
 import type { AppLanguage, MessageStats } from '../types/chat.types';
-import { normalizeText } from './textNormalizer';
+import { normalizeText, stripTashkeel } from './textNormalizer';
+import { withAyahMarker } from './numerals';
+import {
+  getQuranAyahs,
+  getQuranValidation,
+  getSurahList,
+} from './quranDataLoader';
 
 /**
  * ============================================================
@@ -49,14 +55,13 @@ const LOCATION_TRIGGER = /(^|\s)اين(\s|$)|اعرض\s+الايات|فيها\s+
 /** «أول موضع ذكرت فيه …», «آخر موضع ذكرت فيه …» */
 const FIRST_LAST_TRIGGER = /(اول|اخر)\s*(موضع|مره)|first occurrence|last occurrence|first time|last time/;
 
-/** «ما أطول آية؟», «ما أقصر سورة؟» */
-const SUPERLATIVE_TRIGGER = /اطول|اقصر|longest|shortest/;
+/** «ما أطول آية؟», «ما أقصر سورة؟», «أكبر/أصغر سورة», «أكثر السور آياتٍ» */
+const SUPERLATIVE_TRIGGER =
+  /اطول|اقصر|اكبر|اصغر|اكثر|اقل|longest|shortest|largest|smallest|most|least|(^|\s)تحتوي\s+اكبر/;
 
 /** «أيهما أكثر ذكرًا: … أم …», «قارن بين ذكر … و…» */
-const COMPARISON_TRIGGER = /ايهما اكثر|قارن|compare|which is more/;
-
-/** «… في جزء …», «… في صفحة …» — scope this app's dataset does not carry. */
-const JUZ_PAGE_SCOPE_RE = /(^|\s)(جزء|الجزء|صفحه|الصفحه|juz|page)(\s|$)/;
+const COMPARISON_TRIGGER =
+  /ايهما اكثر|ايهما اقل|قارن|مقارنه|الفرق بين|compare|comparison|which is more|which is less/;
 
 /** Explicit request to include the matching ayahs, not only a count. */
 const WANTS_DETAILS_RE = /مع\s*الايات|اعرض\s*الايات|مع\s*النص|with (the )?verses|show (the )?ayahs/;
@@ -69,7 +74,7 @@ const DATA_UNAVAILABLE_EN =
 /** Generic words that carry no target information. */
 const BASIC_FILLERS = new Set([
   'كم', 'في', 'من', 'القران', 'الكريم', 'المصحف', 'النص', 'كله', 'كاملا',
-  'كامل', 'هل', 'يوجد', 'توجد', 'هناك',
+  'كامل', 'هل', 'يوجد', 'توجد', 'هناك', 'ما', 'التي', 'الذي', 'هو', 'هي',
   'how', 'many', 'much', 'count', 'number', 'total', 'the', 'in', 'is',
   'are', 'there', 'of', 'all', 'whole', 'entire', 'quran', 'koran',
 ]);
@@ -278,6 +283,34 @@ function countChars(text: string, chars: string[]): number {
 }
 
 /**
+ * Reusable, explicit counters (§7). Word/character counts default to the
+ * NORMALIZED Quran text (diacritics, tatweel and punctuation removed, alef
+ * unified) so the same rule applies to every ayah and surah.
+ */
+export function countWords(text: string): number {
+  return normalizeText(text).split(' ').filter(Boolean).length;
+}
+
+/** Characters excluding spaces, punctuation, ayah-number ornaments and diacritics. */
+export function countCharacters(text: string): number {
+  return normalizeText(text).replace(/\s/g, '').length;
+}
+
+/** Exact-word occurrences of `target` (whole normalized token), the default match mode. */
+export function countExactWordOccurrences(text: string, target: string): number {
+  const t = normalizeText(target);
+  if (!t) return 0;
+  let n = 0;
+  for (const w of normalizeText(text).split(' ')) if (w === t) n += 1;
+  return n;
+}
+
+/** Raw substring occurrences of `target` (opt-in mode). */
+export function countSubstringOccurrences(text: string, target: string): number {
+  return countSub(normalizeText(text), normalizeText(target));
+}
+
+/**
  * When لام الجر attaches to a word starting with «ال», the alef is
  * elided in the mushaf orthography: الرحمن ← للرحمن (article lam kept,
  * jar lam added), but words already opening with doubled lam contract
@@ -372,7 +405,7 @@ function collectAyahs(entries: AnalyticsEntry[], scope: number | null): AyahRef[
         surahNameEn: e.group.surah_transliteration,
         ayahNumber: a.number,
         text: a.text,
-        normText: normalizeText(a.text),
+        normText: normForMatch(a.text),
       });
     }
   }
@@ -384,7 +417,7 @@ function ayahReference(a: AyahRef, lang: AppLanguage): AnswerReference {
     type: 'quran',
     surah: lang === 'ar' ? a.surahName : a.surahNameEn,
     ayah: String(a.ayahNumber),
-    text: a.text,
+    text: withAyahMarker(a.text, a.ayahNumber),
   };
 }
 
@@ -508,9 +541,36 @@ function handleFirstLast(
 /* 3) Longest / shortest ayah or surah                                  */
 /* ------------------------------------------------------------------ */
 
+type SuperlativeMetric = 'ayahs' | 'words' | 'characters';
+
+/** Which extreme + which metric a superlative question asks for. */
+function superlativeIntent(normQuery: string): {
+  wantMax: boolean;
+  metric: SuperlativeMetric | null;
+} {
+  const wantMax = /اطول|اكبر|اكثر|longest|largest|most|تحتوي\s+اكبر/.test(normQuery);
+  let metric: SuperlativeMetric | null = null;
+  if (/كلمه|كلمات|words?|word/.test(normQuery)) metric = 'words';
+  else if (/احرف|حروف|الاحرف|الحروف|حرف|character|letter/.test(normQuery)) metric = 'characters';
+  else if (/ايه|اية|الايات|ايات|ayah|verse/.test(normQuery)) metric = 'ayahs';
+  return { wantMax, metric };
+}
+
+const METRIC_LABEL: Record<SuperlativeMetric, { ar: string; en: string }> = {
+  ayahs: { ar: 'عدد الآيات', en: 'number of ayahs' },
+  words: { ar: 'عدد الكلمات', en: 'number of words' },
+  characters: { ar: 'عدد الأحرف (بعد إزالة التشكيل والمسافات)', en: 'character count (diacritics & spaces removed)' },
+};
+
+/** Items sharing the extreme (max or min) value — ties are never hidden (§5). */
+function extremes<T>(items: T[], value: (t: T) => number, wantMax: boolean): { value: number; matches: T[] } {
+  const vals = items.map(value);
+  const extreme = wantMax ? Math.max(...vals) : Math.min(...vals);
+  return { value: extreme, matches: items.filter((t) => value(t) === extreme) };
+}
+
 function handleSuperlative(
   normQuery: string,
-  tokens: string[],
   entries: AnalyticsEntry[],
   scope: number | null,
   scopeName: string,
@@ -518,58 +578,62 @@ function handleSuperlative(
   note: string,
   title: string,
 ): AnalyticsOutcome {
-  const wantLongest = /اطول|longest/.test(normQuery);
-  const wantsAyah = tokens.some((t) => TOTAL_SETS.ayahs.has(t));
-  const wantsSurah = tokens.some((t) => TOTAL_SETS.surahs.has(t));
+  const { wantMax, metric } = superlativeIntent(normQuery);
+  // A superlative about a SURAH ("... سورة ...") vs an AYAH ("... آية ...").
+  const wantsSurah = /سوره|surah/.test(normQuery);
+  const wantsAyah = !wantsSurah && /ايه|اية|ayah|verse/.test(normQuery);
 
-  if (wantsAyah && !wantsSurah) {
-    const ayahs = collectAyahs(entries, scope);
-    if (ayahs.length === 0) return null;
-    let best = ayahs[0];
-    for (const a of ayahs) {
-      const better = wantLongest ? a.text.length > best.text.length : a.text.length < best.text.length;
-      if (better) best = a;
+  const supAr = wantMax ? 'أطول' : 'أقصر';
+  const supEn = wantMax ? 'longest' : 'shortest';
+
+  if (wantsSurah) {
+    // Surah superlative — default metric is number of ayahs (§4/§5).
+    const m: SuperlativeMetric = metric === 'words' || metric === 'characters' ? metric : 'ayahs';
+    const perSurah = new Map<number, { name: string; nameEn: string; value: number }>();
+    for (const e of entries) {
+      const value =
+        m === 'ayahs'
+          ? e.group.ayahs.length
+          : m === 'words'
+            ? countWords(e.group.ayah_text)
+            : countCharacters(e.group.ayah_text);
+      const existing = perSurah.get(e.group.surah);
+      if (existing) existing.value += value;
+      else perSurah.set(e.group.surah, { name: e.group.surah_name, nameEn: e.group.surah_transliteration, value });
     }
+    const list = [...perSurah.values()];
+    if (list.length === 0) return null;
+    const { value, matches } = extremes(list, (s) => s.value, wantMax);
+    const namesAr = matches.map((s) => `سورة ${s.name}`).join('، ');
+    const namesEn = matches.map((s) => `Surah ${s.nameEn}`).join(', ');
+    const tie = matches.length > 1;
     return {
       kind: 'answer', title, note,
       answer:
         lang === 'ar'
-          ? `${wantLongest ? 'أطول' : 'أقصر'} آية${scopeName} في البيانات المتوفرة لديّ (بعدد الأحرف كما وردت في المصحف) هي الآية ${best.ayahNumber} من سورة ${best.surahName}، وعدد أحرفها ${best.text.length}.`
-          : `The ${wantLongest ? 'longest' : 'shortest'} ayah${scopeName} in the data available to me (by character count as written in the mushaf) is ayah ${best.ayahNumber} of Surah ${best.surahNameEn}, with ${best.text.length} characters.`,
-      references: [ayahReference(best, lang)],
+          ? `${supAr} ${tie ? 'سور' : 'سورة'} في القرآن من حيث ${METRIC_LABEL[m].ar}${scopeName} هي ${namesAr}، ${tie ? 'ولكلٍّ منها' : 'وعددها'} ${value} ${m === 'ayahs' ? ayahUnitAr(value) : m === 'words' ? 'كلمة' : 'حرفًا'}.`
+          : `The ${supEn} surah${tie ? 's' : ''} in the Quran by ${METRIC_LABEL[m].en}${scopeName} ${tie ? 'are' : 'is'} ${namesEn}, ${tie ? 'each with' : 'with'} ${value} ${m === 'ayahs' ? 'ayahs' : m === 'words' ? 'words' : 'characters'}.`,
     };
   }
 
-  if (wantsSurah) {
-    const perSurah = new Map<number, { name: string; nameEn: string; ayahCount: number }>();
-    for (const e of entries) {
-      const existing = perSurah.get(e.group.surah);
-      const count = e.group.ayahs.length;
-      if (existing) existing.ayahCount += count;
-      else
-        perSurah.set(e.group.surah, {
-          name: e.group.surah_name,
-          nameEn: e.group.surah_transliteration,
-          ayahCount: count,
-        });
-    }
-    if (perSurah.size === 0) return null;
-    let bestSurah: { name: string; nameEn: string; ayahCount: number } | null = null;
-    for (const s of perSurah.values()) {
-      if (
-        !bestSurah ||
-        (wantLongest ? s.ayahCount > bestSurah.ayahCount : s.ayahCount < bestSurah.ayahCount)
-      ) {
-        bestSurah = s;
-      }
-    }
-    if (!bestSurah) return null;
+  if (wantsAyah) {
+    // Ayah superlative — default metric is characters; words if asked.
+    const m: SuperlativeMetric = metric === 'words' ? 'words' : 'characters';
+    const ayahs = collectAyahs(entries, scope);
+    if (ayahs.length === 0) return null;
+    const value = (a: AyahRef) => (m === 'words' ? countWords(a.text) : countCharacters(a.text));
+    const { value: extreme, matches } = extremes(ayahs, value, wantMax);
+    const shown = matches.slice(0, MAX_LOCATION_RESULTS);
+    const tie = matches.length > 1;
+    const listAr = shown.map((a) => `الآية ${a.ayahNumber} من سورة ${a.surahName}`).join('، ');
+    const listEn = shown.map((a) => `ayah ${a.ayahNumber} of Surah ${a.surahNameEn}`).join(', ');
     return {
       kind: 'answer', title, note,
       answer:
         lang === 'ar'
-          ? `${wantLongest ? 'أطول' : 'أقصر'} سورة في البيانات المتوفرة لديّ (بعدد الآيات) هي سورة ${bestSurah.name}، وعدد آياتها ${bestSurah.ayahCount}.`
-          : `The ${wantLongest ? 'longest' : 'shortest'} surah in the data available to me (by ayah count) is Surah ${bestSurah.nameEn}, with ${bestSurah.ayahCount} ayahs.`,
+          ? `${supAr} ${tie ? 'آيات' : 'آية'}${scopeName} في القرآن من حيث ${METRIC_LABEL[m].ar} ${tie ? 'هي' : 'هي'} ${listAr}، ${tie ? 'ولكلٍّ منها' : 'وعددها'} ${extreme} ${m === 'words' ? 'كلمة' : 'حرفًا'}.${tie && matches.length > shown.length ? ` (يُعرض ${shown.length} من ${matches.length})` : ''}`
+          : `The ${supEn} ayah${tie ? 's' : ''}${scopeName} in the Quran by ${METRIC_LABEL[m].en} ${tie ? 'are' : 'is'} ${listEn}, ${tie ? 'each with' : 'with'} ${extreme} ${m === 'words' ? 'words' : 'characters'}.`,
+      references: shown.map((a) => ayahReference(a, lang)),
     };
   }
 
@@ -655,6 +719,223 @@ function handleComparison(
 }
 
 /* ------------------------------------------------------------------ */
+/* Quran-dataset feed (source of truth = quran.json, NOT tafsir)        */
+/*                                                                     */
+/* The analytics handlers all consume AnalyticsEntry[] (one synthetic  */
+/* per-surah "group" of ayahs) + a surah-name lookup. Building these    */
+/* from quran.json makes every statistic independent of tafsir loading  */
+/* — they now work even when Tafsir data is null or fails to load.      */
+/* ------------------------------------------------------------------ */
+
+/** Per-ayah juz/page, keyed `${surah}:${ayah}` — enables Juz/page scoping. */
+const ayahMeta = new Map<string, { juz: number; page: number }>();
+let cachedEntries: AnalyticsEntry[] | null = null;
+let cachedLookup: SurahLookup | null = null;
+
+function ayahKey(surah: number, ayah: number): string {
+  return `${surah}:${ayah}`;
+}
+
+/**
+ * Match-normalization for Quran text: normalizeText PLUS collapsing the
+ * Uthmani «ءا» (hamza+alef) that renders «آ». Without this «الآخرة» (which a
+ * user types, normalizing to «الاخره») would never match the mushaf spelling
+ * «ٱلْءَاخِرَةِ» → «الءاخره». Only the hamza-then-alef sequence collapses, so
+ * «ماء»/«شيء» (alef-then-hamza) are untouched. Applied symmetrically to the
+ * corpus below; user targets already normalize «آ»→«ا», so they need nothing.
+ */
+function normForMatch(text: string): string {
+  return normalizeText(text).replace(/ءا/g, 'ا');
+}
+
+/** Arabic ayah unit: 3–10 take the plural «آيات», otherwise «آية». */
+function ayahUnitAr(n: number): string {
+  return n >= 3 && n <= 10 ? 'آيات' : 'آية';
+}
+
+/** Builds (once) the analytics entries + surah lookup + juz/page map from quran.json. */
+function buildQuranAnalytics(): void {
+  if (cachedEntries && cachedLookup) return;
+
+  const ayahs = getQuranAyahs();
+  const surahList = getSurahList();
+  const meta = new Map(surahList.map((s) => [s.number, s]));
+
+  // Group ayahs into one synthetic TafseerGroup-shaped entry per surah.
+  const bySurah = new Map<number, { number: number; text: string }[]>();
+  ayahMeta.clear();
+  for (const a of ayahs) {
+    let list = bySurah.get(a.surahNumber);
+    if (!list) {
+      list = [];
+      bySurah.set(a.surahNumber, list);
+    }
+    list.push({ number: a.ayahNumber, text: a.textUthmani });
+    ayahMeta.set(ayahKey(a.surahNumber, a.ayahNumber), { juz: a.juz, page: a.page });
+  }
+
+  const entries: AnalyticsEntry[] = [];
+  for (const [surahNumber, list] of [...bySurah.entries()].sort((x, y) => x[0] - y[0])) {
+    list.sort((x, y) => x.number - y.number);
+    const info = meta.get(surahNumber);
+    // Clean display name: drop the «سُورَةُ» prefix and tashkeel so answers
+    // read «سورة البقرة» (matching the spec) rather than «سورة البَقَرَةِ».
+    const nameArabic = stripTashkeel(info?.nameArabic ?? `سورة ${surahNumber}`)
+      .replace(/^سُورَةُ?\s+/, '')
+      .replace(/^سورة\s+/, '')
+      .trim();
+    const ayahText = list.map((a) => a.text).join(' ');
+    const group: TafseerGroup = {
+      surah: surahNumber,
+      surah_name: nameArabic,
+      surah_transliteration: info?.nameEnglish ?? `Surah ${surahNumber}`,
+      surah_type: '',
+      ayah_start: list[0]?.number ?? 1,
+      ayah_end: list[list.length - 1]?.number ?? list.length,
+      ayahs: list,
+      ayah_text: ayahText,
+      explanation: '',
+    };
+    entries.push({ group, normAyahText: normForMatch(ayahText) });
+  }
+  cachedEntries = entries;
+
+  // Surah-name lookup: normalized Arabic name (± article) + english + number.
+  const lookup = new Map<string, number>();
+  for (const s of surahList) {
+    const norm = normalizeText(s.nameArabic).replace(/^سوره\s+/, '').trim();
+    if (norm && !lookup.has(norm)) lookup.set(norm, s.number);
+    if (norm.startsWith('ال') && norm.length > 4) {
+      const noArticle = norm.slice(2);
+      if (!lookup.has(noArticle)) lookup.set(noArticle, s.number);
+    }
+    const en = normalizeText(s.nameEnglish).replace(/\s+/g, '');
+    if (en && !lookup.has(en)) lookup.set(en, s.number);
+  }
+  cachedLookup = (name: string) => lookup.get(name) ?? null;
+}
+
+/** AnalyticsEntry[] derived from quran.json (cached). The analytics source of truth. */
+export function getQuranAnalyticsEntries(): AnalyticsEntry[] {
+  buildQuranAnalytics();
+  return cachedEntries!;
+}
+
+/** Surah-name → number resolver derived from quran.json (cached). */
+export function getAnalyticsSurahLookup(): SurahLookup {
+  buildQuranAnalytics();
+  return cachedLookup!;
+}
+
+/** juz/page for an ayah (from quran.json), or null. */
+function ayahScopeMeta(surah: number, ayah: number): { juz: number; page: number } | null {
+  buildQuranAnalytics();
+  return ayahMeta.get(ayahKey(surah, ayah)) ?? null;
+}
+
+/**
+ * Whether the bundled Quran dataset is complete (6236 ayahs). A Quran-wide
+ * statistic is never computed from partial data — the caller returns a clear
+ * message instead.
+ */
+export function isQuranDataComplete(): boolean {
+  const v = getQuranValidation();
+  return v.valid && v.count === 6236;
+}
+
+export const QURAN_INCOMPLETE_AR =
+  'تعذر إجراء الإحصاء بدقة لأن بيانات القرآن داخل التطبيق غير مكتملة.';
+export const QURAN_INCOMPLETE_EN =
+  'The statistic could not be computed accurately because the Quran data in the app is incomplete.';
+
+/* ------------------------------------------------------------------ */
+/* Juz / page scope (fields present in quran.json — §8)                 */
+/* ------------------------------------------------------------------ */
+
+/** Single-word Arabic ordinals/cardinals → number (1–30), for «الجزء الثلاثين». */
+const NUMBER_WORDS: Record<string, number> = {
+  الاول: 1, الاولى: 1, اول: 1, واحد: 1,
+  الثاني: 2, الثانيه: 2, اثنان: 2, اثنين: 2,
+  الثالث: 3, الثالثه: 3, ثلاثه: 3, ثلاث: 3,
+  الرابع: 4, الرابعه: 4, اربعه: 4, اربع: 4,
+  الخامس: 5, الخامسه: 5, خمسه: 5, خمس: 5,
+  السادس: 6, السادسه: 6, سته: 6, ست: 6,
+  السابع: 7, السابعه: 7, سبعه: 7, سبع: 7,
+  الثامن: 8, الثامنه: 8, ثمانيه: 8, ثمان: 8,
+  التاسع: 9, التاسعه: 9, تسعه: 9, تسع: 9,
+  العاشر: 10, العاشره: 10, عشره: 10, عشر: 10,
+  العشرون: 20, العشرين: 20, عشرون: 20, عشرين: 20,
+  الثلاثون: 30, الثلاثين: 30, ثلاثون: 30, ثلاثين: 30,
+};
+
+/** Arabic-Indic → Western digits (normalizeText already does this, but keep a public seam). */
+export function normalizeDigits(input: string): string {
+  return input.replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+}
+
+/** Reads a number written as a Western digit or a supported Arabic word. */
+function parseScopeNumber(token: string | undefined): number | null {
+  if (!token) return null;
+  const digits = normalizeDigits(token).match(/\d+/);
+  if (digits) return Number(digits[0]);
+  return NUMBER_WORDS[token] ?? null;
+}
+
+export interface JuzPageScope {
+  juz?: number;
+  page?: number;
+}
+
+/**
+ * Extracts a juz/page scope from the padded normalized query and returns the
+ * query with the matched scope phrase removed (so token-based logic below never
+ * mistakes «الجزء» / «الثلاثين» for a target word).
+ */
+function resolveJuzPageScope(paddedQuery: string): { scope: JuzPageScope; q: string } {
+  let q = paddedQuery;
+  const scope: JuzPageScope = {};
+
+  const juzMatch = q.match(/\s(الجزء|جزء|juz)\s+(\S+)/);
+  if (juzMatch) {
+    const n = parseScopeNumber(juzMatch[2]);
+    if (n !== null) {
+      scope.juz = n;
+      q = q.replace(juzMatch[0], ' ');
+    }
+  }
+  const pageMatch = q.match(/\s(الصفحه|صفحه|page)\s+(\S+)/);
+  if (pageMatch) {
+    const n = parseScopeNumber(pageMatch[2]);
+    if (n !== null) {
+      scope.page = n;
+      q = q.replace(pageMatch[0], ' ');
+    }
+  }
+  return { scope, q };
+}
+
+/** Filters entries to only the ayahs inside the given juz/page (empty groups dropped). */
+function filterEntriesByJuzPage(entries: AnalyticsEntry[], scope: JuzPageScope): AnalyticsEntry[] {
+  const out: AnalyticsEntry[] = [];
+  for (const e of entries) {
+    const kept = e.group.ayahs.filter((a) => {
+      const m = ayahScopeMeta(e.group.surah, a.number);
+      if (!m) return false;
+      if (scope.juz !== undefined && m.juz !== scope.juz) return false;
+      if (scope.page !== undefined && m.page !== scope.page) return false;
+      return true;
+    });
+    if (kept.length === 0) continue;
+    const ayahText = kept.map((a) => a.text).join(' ');
+    out.push({
+      group: { ...e.group, ayahs: kept, ayah_text: ayahText },
+      normAyahText: normForMatch(ayahText),
+    });
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------------ */
 /* Main entry point                                                    */
 /* ------------------------------------------------------------------ */
 
@@ -679,9 +960,9 @@ export function tryAnalytics(
     return { kind: 'clarify', answer: lang === 'ar' ? DATA_UNAVAILABLE_AR : DATA_UNAVAILABLE_EN };
   }
 
-  // This dataset only carries surah/ayah boundaries — no juz or page data.
-  if (JUZ_PAGE_SCOPE_RE.test(normQuery)) {
-    return { kind: 'clarify', answer: lang === 'ar' ? DATA_UNAVAILABLE_AR : DATA_UNAVAILABLE_EN };
+  // Never compute a Quran-wide statistic from partial data (§14).
+  if (!isQuranDataComplete()) {
+    return { kind: 'clarify', answer: lang === 'ar' ? QURAN_INCOMPLETE_AR : QURAN_INCOMPLETE_EN };
   }
 
   // Western digits in both languages: clearer at small sizes and
@@ -694,10 +975,55 @@ export function tryAnalytics(
   const title =
     lang === 'ar' ? 'إحصاء من نص القرآن الكريم' : 'Statistics from the Quran text';
 
-  // ---- optional surah scope: «... في سورة مريم» / "... in surah maryam"
+  // ---- optional juz/page scope (§8): «... في الجزء الثلاثين», «... في الصفحة 42»
   let q = ` ${normQuery} `;
   let scope: number | null = null;
   let scopeName = '';
+
+  const { scope: jp, q: qAfterJuz } = resolveJuzPageScope(q);
+  q = qAfterJuz;
+  if (jp.juz !== undefined || jp.page !== undefined) {
+    if (jp.juz !== undefined && (jp.juz < 1 || jp.juz > 30)) {
+      return {
+        kind: 'clarify',
+        answer:
+          lang === 'ar'
+            ? 'رقم الجزء غير صحيح؛ أجزاء القرآن من ١ إلى ٣٠.'
+            : 'Invalid juz number; the Quran has 30 juz (1–30).',
+      };
+    }
+    if (jp.page !== undefined && (jp.page < 1 || jp.page > 604)) {
+      return {
+        kind: 'clarify',
+        answer:
+          lang === 'ar'
+            ? 'رقم الصفحة غير صحيح؛ صفحات المصحف من ١ إلى ٦٠٤.'
+            : 'Invalid page number; the mushaf has pages 1–604.',
+      };
+    }
+    entries = filterEntriesByJuzPage(entries, jp);
+    if (entries.length === 0) {
+      return {
+        kind: 'answer',
+        title,
+        note,
+        answer:
+          lang === 'ar'
+            ? `لا توجد آيات ضمن ${jp.juz !== undefined ? `الجزء ${jp.juz}` : `الصفحة ${jp.page}`} في بيانات التطبيق.`
+            : `No ayahs found within ${jp.juz !== undefined ? `Juz ${jp.juz}` : `page ${jp.page}`} in the app data.`,
+      };
+    }
+    scopeName =
+      lang === 'ar'
+        ? jp.juz !== undefined
+          ? ` في الجزء ${jp.juz}`
+          : ` في الصفحة ${jp.page}`
+        : jp.juz !== undefined
+          ? ` in Juz ${jp.juz}`
+          : ` in page ${jp.page}`;
+  }
+
+  // ---- optional surah scope: «... في سورة مريم» / "... in surah maryam"
   const scopeMatch = q.match(/\s(سوره|سورت|surah|surat|sura)\s+(\S+)(?:\s+(\S+))?/);
   if (scopeMatch) {
     const kw = scopeMatch[1];
@@ -715,7 +1041,7 @@ export function tryAnalytics(
   if (scope !== null) {
     const g = entries.find((e) => e.group.surah === scope);
     if (g) {
-      scopeName =
+      scopeName +=
         lang === 'ar'
           ? ` في سورة ${g.group.surah_name}`
           : ` in Surah ${g.group.surah_transliteration}`;
@@ -728,7 +1054,7 @@ export function tryAnalytics(
 
   // ---- extended analytics: location / first-last / superlative / comparison
   if (hasSuperlativeTrigger) {
-    const result = handleSuperlative(normQuery, tokens, entries, scope, scopeName, lang, note, title);
+    const result = handleSuperlative(normQuery, entries, scope, scopeName, lang, note, title);
     if (result) return result;
   }
   if (hasComparisonTrigger) {
